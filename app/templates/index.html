@@ -12,11 +12,21 @@
             <h2 class="title-1">Sean's Lager Fridge</h2>
         </div>
     </header>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <ul class=flashes>
+            {% for category, message in messages %}
+                <li class="{{ category }}">{{ message }}</li>
+            {% endfor %}
+            </ul>
+        {% endif %}
+    {% endwith %}
     <div class="container page-page">
         <form method="post">
+            {{ form.csrf_token }}
             Current temp: {{ current_temp }} <br>
-            Target temp: {{ target_temp }} <br>
-            {{ message }} <br>
+            {{ form.target_temp.label }}{{ form.target_temp }}
+            <br>
             <input type="submit" name="update_target" value="Update Target">
             <input type="submit" name="turn_off_fridge" value="Fridge Off">
             <input type="submit" name="turn_on_fridge" value="Fridge On">

@@ -18,6 +18,8 @@ def read_temp_raw():
     return lines
  
 def read_temp():
+    # Hard coding the temp
+    return 0, 50
     lines = read_temp_raw()
     while lines[0].strip()[-3:] != 'YES':
         time.sleep(0.2)
