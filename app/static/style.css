@@ -1,17 +1,32 @@
 .page-container {
-    margin-top: 25px;
-    padding-top: 25px;
     padding-bottom: 25px;
 }
 
 .page-title {
-	background-color: #5c5252;
+    background-color: #e8dab2;
     margin: 0;
     width: 100%;
     padding: 25px;
-    margin-top: 25px;
 }
 
 .title-1 {
+    text-align: center;
+}
+
+.flex-container {
+  display: flex;
+}
+
+.flex-container > div {
+  text-align: center;
+  flex-grow: 1;
+  padding: 10px;
+}
+
+.message {
+    padding: 25px;
+}
+
+.message-text {
     text-align: center;
 }

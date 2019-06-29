@@ -3,4 +3,5 @@ flask_wtf
 flask-sqlalchemy
 flask-migrate
 flask-bootstrap
+Flask-Nav
 ipdb

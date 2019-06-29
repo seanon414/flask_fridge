@@ -1,43 +1,42 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Lager Fridge</title>
-    {% block css %}
-        <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
-    {% endblock css %}
-</head>
-<body>
+{% extends 'base.html' %}
+{% import 'bootstrap/wtf.html' as wtf %}
+
+{% block title %}
+    Lager Fridge
+{% endblock %}
+
+{% block content %}
     <header>
         <div class="page-title">
             <h2 class="title-1">Sean's Lager Fridge</h2>
         </div>
     </header>
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            <ul class=flashes>
-            {% for category, message in messages %}
-                <li class="{{ category }}">{{ message }}</li>
-            {% endfor %}
-            </ul>
-        {% endif %}
-    {% endwith %}
-    <div class="container page-page">
-        <form method="post">
-            {{ form.csrf_token }}
-            Current temp: {{ current_temp }} <br>
-            {{ form.target_temp.label }}{{ form.target_temp }}
-            <br>
-            <input type="submit" name="update_target" value="Update Target">
-            <input type="submit" name="turn_off_fridge" value="Fridge Off">
-            <input type="submit" name="turn_on_fridge" value="Fridge On">
-        </form>
-    <div>
-
-    {% block js%}
-        <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
-        <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
-    {% endblock js%}
-
-</body>
-</html>
+    <div class="container">
+        {% block app_content %}
+            <div class="container page-page item">
+                <br>
+                <form  method="post" role="form">
+                    {{ form.csrf_token }}
+                    <div class="flex-container">
+                        <div>{{ wtf.form_field(form.target_temp) }}</div>
+                        <div>{{ wtf.form_field(form.current_temp) }}</div>
+                    </div>
+                    <div class="flex-container">
+                        <div><input type="submit" name="update_target" value="Update Target"></div>
+                        <div><input type="submit" name="turn_off_fridge" value="Fridge Off"></div>
+                        <div><input type="submit" name="turn_on_fridge" value="Fridge On"></div>
+                    </div>
+                </form>
+            </div>
+        {% endblock app_content %}
+        {% with messages = get_flashed_messages() %}
+            <div class="message">
+                {% if messages %}
+                    {% for message in messages %}
+                    <div class="alert alert-info message-text" role="alert">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            </div>
+        {% endwith %}
+    </div>
+{% endblock content %}

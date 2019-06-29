@@ -10,11 +10,11 @@ index_blueprint = Blueprint('index', __name__, static_folder='static')
 
 @index_blueprint.route("/", methods=['GET', 'POST'])
 def index():
-    temperature = Temp.query.get(1)
-    form = IndexForm(obj=temperature)
     current_temp_c, current_temp_f = read_temp()
-    target_temp = 0
-    message = ''
+    temperature = Temp.query.get(1)
+    temperature.current_temp = current_temp_f
+    form = IndexForm(obj=temperature)
+
     if request.method == 'POST':
         if 'update_target' in request.form and form.validate():
             # Todo: Add ability to update target temp
@@ -28,7 +28,5 @@ def index():
         elif 'turn_on_fridge' in request.form:
             turn_on_fridge()
             flash('The frige has been turned on.', 'info')
-        else:
-            flash('Your form was not valid {}'.format(form.errors), 'error')
 
-    return render_template('index.html', form=form, current_temp=current_temp_f, target_temp=temperature.target_temp, message=message)
+    return render_template('index.html', form=form, current_temp=current_temp_f, target_temp=temperature.target_temp)
