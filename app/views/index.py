@@ -22,6 +22,8 @@ def index():
             temperature.target_temp = target_temp
             db.session.commit()
             flash('Taget temp set to {}'.format(target_temp), 'info')
+        elif 'refresh_current_temp' in request.form:
+            flash('Retrieved latest temp reading.', 'info')
         elif 'turn_off_fridge' in request.form:
             turn_off_fridge()
             flash('The frige has been turned off.', 'info')
