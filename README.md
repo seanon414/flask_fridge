@@ -2,6 +2,26 @@
 
 Tempature control a chest freezer with raspberry pi, GPIO code signals and thermostat.
 
+## Running Flask
+
+### Clone this repo
+
+1. Export flask app env var
+```
+export FLASK_APP=app
+```
+
+2. Initialize database
+```
+flask db init
+```
+
+3. Run Flask app
+```
+flask run
+```
+
+
 ## Setup
 
 ### Wiringpi

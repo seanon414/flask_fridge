@@ -32,3 +32,4 @@ def index():
             flash('The frige has been turned on.', 'info')
 
     return render_template('index.html', form=form, current_temp=current_temp_f, target_temp=temperature.target_temp)
+
