@@ -170,16 +170,6 @@
   function refreshHistory() {
     return api('/api/history?hours=' + state.hours).then(function (data) {
       state.history = data;
-      var note = $('range-note');
-      var first = data.points.length ? Date.parse(data.points[0].t) : null;
-      var spanH = first === null ? 0 : (Date.now() - first) / 3600000;
-      if (first !== null && spanH < data.hours * 0.9) {
-        var spanText = spanH < 1 ? Math.round(spanH * 60) + ' min' : fmt(spanH, 1) + ' h';
-        note.textContent = 'Only ' + spanText + ' recorded so far, so this range shows everything.';
-        note.hidden = false;
-      } else {
-        note.hidden = true;
-      }
       var st = data.stats || {};
       $('stat-min').textContent = st.min === null || st.min === undefined ? '--' : fmt(st.min) + '°';
       $('stat-avg').textContent = st.avg === null || st.avg === undefined ? '--' : fmt(st.avg) + '°';
@@ -233,9 +223,7 @@
     var hyst = state.settings ? state.settings.hysteresis : 1;
     var hours = state.history.hours || state.hours;
     var tMax = Date.now();
-    var windowStart = tMax - hours * 3600 * 1000;
-    // With less than a full window of data, zoom to what we have.
-    var tMin = Math.max(windowStart, pts[0].t - (tMax - pts[0].t) * 0.02);
+    var tMin = tMax - hours * 3600 * 1000;
 
     // Scale to temperatures and the *current* band, so an old target
     // setting doesn't stretch the axis. Older bands are clipped.
@@ -295,6 +283,25 @@
     ctx.save();
     ctx.beginPath(); ctx.rect(m.l, m.t, pw, ph + 1); ctx.clip();
 
+    // "No data": before the first reading, and across controller outages
+    var holes = [];
+    if (pts[0].t > tMin) { holes.push([tMin, pts[0].t]); }
+    for (var q = 1; q < pts.length; q++) {
+      if (pts[q].t - pts[q - 1].t > maxGap) { holes.push([pts[q - 1].t, pts[q].t]); }
+    }
+    var pattern = hatch(cLine);
+    holes.forEach(function (hole) {
+      var hx0 = Math.max(m.l, X(hole[0])), hx1 = Math.min(m.l + pw, X(hole[1]));
+      if (hx1 - hx0 < 2) { return; }
+      ctx.fillStyle = pattern; ctx.globalAlpha = 0.6;
+      ctx.fillRect(hx0, m.t, hx1 - hx0, ph);
+      ctx.globalAlpha = 1;
+      if (hx1 - hx0 > 70) {
+        ctx.fillStyle = cText; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('No data', (hx0 + hx1) / 2, m.t + ph / 2);
+      }
+    });
+
     // target band
     var segs = splitSegments(pts, maxGap, function (p) { return p.target !== null && p.target !== undefined; });
     ctx.fillStyle = 'rgba(76, 201, 240, 0.14)';
@@ -343,6 +350,15 @@
     positionTooltip(hp);
   }
 
+  function hatch(color) {
+    var tile = document.createElement('canvas');
+    tile.width = tile.height = 8;
+    var g = tile.getContext('2d');
+    g.strokeStyle = color; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(-2, 10); g.lineTo(10, -2); g.stroke();
+    return ctx.createPattern(tile, 'repeat');
+  }
+
   function splitSegments(pts, maxGap, valid) {
     var out = [], cur = [];
     pts.forEach(function (p, i) {
@@ -385,7 +401,7 @@
       var d = Math.abs(layout.X(p.t) - x);
       if (d < bestD) { bestD = d; best = i; }
     });
-    state.hover = best;
+    state.hover = bestD <= 30 ? best : null;  // ignore the empty "no data" area
     draw();
   }
 
