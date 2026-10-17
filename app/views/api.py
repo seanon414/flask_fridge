@@ -1,19 +1,23 @@
+import os
 from datetime import datetime, timedelta
 
 from flask import Blueprint, jsonify, request
 
 from app import db
-from app.models.temp import MODES, Reading, get_settings
+from app.models.temp import MODES, AlertState, Event, Reading, get_settings
 
 api_blueprint = Blueprint('api', __name__, url_prefix='/api')
 
 # The controller logs every 30s; call it dead after four missed cycles.
 STALE_AFTER_SECONDS = 120
 MAX_HISTORY_POINTS = 300
+MAX_HISTORY_EVENTS = 200
 MAX_HISTORY_HOURS = 24 * 30
 
-TARGET_RANGE = (20, 70)
+TARGET_RANGE = (20.0, 70.0)
 HYSTERESIS_RANGE = (0.5, 10.0)
+
+MODE_LABELS = {'auto': 'Auto', 'on': 'Forced on', 'off': 'Forced off'}
 
 
 def _iso(dt):
@@ -38,6 +42,8 @@ def status():
     if last is not None:
         age = (datetime.utcnow() - last.timestamp).total_seconds()
 
+    active_alerts = AlertState.query.filter_by(active=True).order_by(AlertState.since).all()
+
     return jsonify({
         'settings': _settings_json(settings),
         'temp_f': last.temp_f if last else None,
@@ -46,6 +52,9 @@ def status():
         'age_seconds': age,
         'controller_ok': age is not None and age <= STALE_AFTER_SECONDS,
         'sensor_ok': bool(last and last.temp_f is not None),
+        'alerts': [{'key': a.key, 'message': a.message,
+                    'since': _iso(a.since) if a.since else None} for a in active_alerts],
+        'notifications_enabled': bool(os.environ.get('NTFY_TOPIC', '').strip()),
     })
 
 
@@ -80,6 +89,8 @@ def history():
     since = datetime.utcnow() - timedelta(hours=hours)
     rows = Reading.query.filter(Reading.timestamp >= since) \
         .order_by(Reading.timestamp).all()
+    events = Event.query.filter(Event.timestamp >= since) \
+        .order_by(Event.timestamp).limit(MAX_HISTORY_EVENTS).all()
 
     temps = [r.temp_f for r in rows if r.temp_f is not None]
     known = [r for r in rows if r.fridge_on is not None]
@@ -94,6 +105,7 @@ def history():
     return jsonify({
         'hours': hours,
         'points': _downsample(rows, MAX_HISTORY_POINTS),
+        'events': [{'t': _iso(e.timestamp), 'kind': e.kind, 'detail': e.detail} for e in events],
         'stats': stats,
     })
 
@@ -102,23 +114,43 @@ def _bad(message):
     return jsonify(error=message), 400
 
 
+def _log_event(kind, detail):
+    db.session.add(Event(kind=kind, detail=detail))
+
+
+def _fmt(value):
+    return '{:.1f}'.format(value)
+
+
 @api_blueprint.route('/settings', methods=['POST'])
 def update_settings():
     data = request.get_json(silent=True) or {}
     try:
-        target = int(data['target_temp'])
+        target = float(data['target_temp'])
         hysteresis = float(data['hysteresis'])
     except (KeyError, TypeError, ValueError):
-        return _bad('target_temp (integer) and hysteresis (number) are required')
+        return _bad('target_temp and hysteresis (numbers) are required')
 
+    if abs(target * 2 - round(target * 2)) > 1e-9:
+        return _bad('target_temp must be a multiple of 0.5')
     if not TARGET_RANGE[0] <= target <= TARGET_RANGE[1]:
-        return _bad('target_temp must be between {} and {}'.format(*TARGET_RANGE))
+        return _bad('target_temp must be between {:g} and {:g}'.format(*TARGET_RANGE))
     if not HYSTERESIS_RANGE[0] <= hysteresis <= HYSTERESIS_RANGE[1]:
-        return _bad('hysteresis must be between {} and {}'.format(*HYSTERESIS_RANGE))
+        return _bad('hysteresis must be between {:g} and {:g}'.format(*HYSTERESIS_RANGE))
+    hysteresis = round(hysteresis, 1)
 
     settings = get_settings()
+    changes = []
+    if settings.target_temp != target:
+        changes.append('Target {} → {}°F'.format(
+            _fmt(settings.target_temp) if settings.target_temp is not None else '--', _fmt(target)))
+    if settings.hysteresis != hysteresis:
+        changes.append('Swing ±{} → ±{}°F'.format(_fmt(settings.hysteresis), _fmt(hysteresis)))
+
     settings.target_temp = target
-    settings.hysteresis = round(hysteresis, 1)
+    settings.hysteresis = hysteresis
+    if changes:
+        _log_event('settings', ', '.join(changes))
     db.session.commit()
     return jsonify(_settings_json(settings))
 
@@ -131,6 +163,9 @@ def update_mode():
         return _bad('mode must be one of: ' + ', '.join(MODES))
 
     settings = get_settings()
+    if settings.mode != mode:
+        _log_event('mode', '{} → {}'.format(
+            MODE_LABELS.get(settings.mode, settings.mode), MODE_LABELS[mode]))
     settings.mode = mode
     db.session.commit()
     return jsonify(_settings_json(settings))

@@ -133,3 +133,29 @@ The browser script is tested under Node with jsdom; the Pi never needs this.
 npm install
 npm test
 ```
+
+## Alerts
+
+Push notifications go through [ntfy](https://ntfy.sh) and are off until you set a topic.
+
+1. Install the ntfy app on your phone and subscribe to a long random topic name.
+2. Put it in `.env` (see `.env.example`): `NTFY_TOPIC=your-long-random-topic`
+3. Install the new units and restart (the controller now reads `.env` too):
+   ```
+   sudo cp deploy/*.service deploy/*.timer /etc/systemd/system/
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now keezer-watchdog.timer
+   sudo systemctl restart keezer keezer-web
+   ```
+4. Check it works: `set -a; . ./.env; set +a; python -m app.scripts.alerts test`
+
+You are alerted when the freezer is too warm or too cold for a sustained stretch
+(3 degF outside the band for 30 min by default), when the sensor has failed for
+10 min, or when the controller has stopped logging (the watchdog, every 2 min).
+Each alert is sent once, repeated after 6 h while it lasts, and followed by a
+"resolved" notice. Active alerts also show in the web UI.
+
+## Setting changes on the chart
+
+Target, swing and mode changes made in the UI are logged (`event` table) and drawn
+as dashed markers on the history chart; hover one to see what changed.

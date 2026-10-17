@@ -40,7 +40,9 @@ function statusBody(o) {
     reading_at: iso(Date.now() - 10000),
     age_seconds: 10,
     controller_ok: true,
-    sensor_ok: true
+    sensor_ok: true,
+    alerts: [],
+    notifications_enabled: false
   }, o);
 }
 
@@ -53,9 +55,10 @@ function points(fromAgoH, toAgoH, stepMin) {
   return out;
 }
 
-function historyBody(pts, stats) {
+function historyBody(pts, stats, events) {
   return {
     points: pts,
+    events: events || [],
     stats: stats || { min: 36, max: 39, avg: 37.5, duty_percent: 15, samples: pts.length }
   };
 }
@@ -131,7 +134,7 @@ test('renders live status', async (t) => {
   assert.equal(ui.$('delta').textContent, 'Within target range');
   assert.equal(ui.$('fridge-state').dataset.state, 'on');
   assert.equal(ui.$('fridge-state-text').textContent, 'Cooling');
-  assert.equal(ui.$('fact-target').textContent, '38');
+  assert.equal(ui.$('fact-target').textContent, '38.0');
   assert.equal(ui.$('fact-range').textContent, '37.0–39.0' + DEG);
   assert.equal(ui.$('fact-mode').textContent, 'Auto');
   assert.equal(ui.$('pill-controller').dataset.state, 'ok');
@@ -191,25 +194,25 @@ test('unreachable server shows a retry banner', async (t) => {
 
 test('steppers edit the form, update the hint and enable Apply', async (t) => {
   const ui = await boot(t);
-  assert.equal(ui.$('target').value, '38');
+  assert.equal(ui.$('target').value, '38.0');
   assert.equal(ui.$('hysteresis').value, '1.0');
   assert.equal(ui.$('apply').disabled, true);
 
-  ui.click('[data-for="target"][data-step="1"]');
+  ui.click('[data-for="target"][data-step="0.5"]');
   ui.click('[data-for="hysteresis"][data-step="0.5"]');
 
-  assert.equal(ui.$('target').value, '39');
+  assert.equal(ui.$('target').value, '38.5');
   assert.equal(ui.$('hysteresis').value, '1.5');
   assert.equal(ui.$('apply').disabled, false);
   assert.equal(ui.$('band-hint').textContent,
-    'Starts cooling above 40.5' + DEG + 'F, stops below 37.5' + DEG + 'F.');
+    'Starts cooling above 40.0' + DEG + 'F, stops below 37.0' + DEG + 'F.');
 });
 
 test('steppers stop at the allowed limits', async (t) => {
   const ui = await boot(t);
   ui.$('target').value = '70';
-  for (let i = 0; i < 3; i++) { ui.click('[data-for="target"][data-step="1"]'); }
-  assert.equal(ui.$('target').value, '70');
+  for (let i = 0; i < 3; i++) { ui.click('[data-for="target"][data-step="0.5"]'); }
+  assert.equal(ui.$('target').value, '70.0');
   ui.$('hysteresis').value = '0.5';
   ui.click('[data-for="hysteresis"][data-step="-0.5"]');
   assert.equal(ui.$('hysteresis').value, '0.5');
@@ -223,26 +226,36 @@ test('invalid input disables Apply and explains the limits', async (t) => {
   assert.match(ui.$('band-hint').textContent, /20.70/);
 });
 
+test('a target that is not a half-degree step is rejected before sending', async (t) => {
+  const ui = await boot(t);
+  ui.$('target').value = '38.3';
+  ui.$('target').dispatchEvent(new ui.win.Event('input'));
+  assert.equal(ui.$('apply').disabled, true);
+  ui.$('target').value = '38.5';
+  ui.$('target').dispatchEvent(new ui.win.Event('input'));
+  assert.equal(ui.$('apply').disabled, false);
+});
+
 test('Apply posts the settings with the CSRF token', async (t) => {
   const ui = await boot(t);
-  ui.click('[data-for="target"][data-step="1"]');
+  ui.click('[data-for="target"][data-step="0.5"]');
   ui.click('#apply');
   await ui.settle();
 
   const [post] = ui.posts();
   assert.equal(post.url, '/api/settings');
-  assert.deepEqual(post.body, { target_temp: 39, hysteresis: 1 });
+  assert.deepEqual(post.body, { target_temp: 38.5, hysteresis: 1 });
   assert.equal(post.headers['X-CSRFToken'], 'test-token');
   assert.equal(post.headers['Content-Type'], 'application/json');
   assert.equal(ui.$('toast').hidden, false);
   assert.match(ui.$('toast').textContent, /Saved/);
-  assert.equal(ui.$('fact-target').textContent, '39');   // refreshed from the server
+  assert.equal(ui.$('fact-target').textContent, '38.5');   // refreshed from the server
 });
 
 test('a rejected save shows the server message and re-enables Apply', async (t) => {
   const ui = await boot(t);
   ui.state.responses.settings = { status: 400, body: { error: 'target_temp must be between 20 and 70' } };
-  ui.click('[data-for="target"][data-step="1"]');
+  ui.click('[data-for="target"][data-step="0.5"]');
   ui.click('#apply');
   await ui.settle();
   assert.equal(ui.$('toast').textContent, 'target_temp must be between 20 and 70');
@@ -357,4 +370,80 @@ test('tooltip stays hidden over the empty "No data" area', async (t) => {
   const ui = await boot(t, { history: historyBody(points(2, 0, 1)) });
   hover(ui, 100);   // far from the readings bunched at the right edge
   assert.equal(ui.$('tooltip').hidden, true);
+});
+
+/* ---------- page title ---------- */
+
+test('page title carries the live temperature', async (t) => {
+  const ui = await boot(t);
+  assert.equal(ui.win.document.title, '37.5' + DEG + 'F · Keezer');
+});
+
+test('page title warns when the controller is silent or an alert is active', async (t) => {
+  let ui = await boot(t, { status: statusBody({ controller_ok: false, age_seconds: 900 }) });
+  assert.equal(ui.win.document.title, '⚠ Keezer');
+  ui = await boot(t, { status: statusBody({ alerts: [{ key: 'too_warm', message: 'Too warm', since: iso(Date.now()) }] }) });
+  assert.equal(ui.win.document.title, '⚠ 37.5' + DEG + 'F · Keezer');
+});
+
+/* ---------- alerts ---------- */
+
+test('active alerts are listed with their start time', async (t) => {
+  const alerts = [
+    { key: 'too_warm', message: 'Too warm: 44.0' + DEG + 'F for 30+ min.', since: iso(Date.now() - 40 * 60000) },
+    { key: 'sensor', message: 'No valid sensor reading.', since: null }
+  ];
+  const ui = await boot(t, { status: statusBody({ alerts, notifications_enabled: true }) });
+  const items = ui.$('alerts').querySelectorAll('li');
+  assert.equal(ui.$('alerts').hidden, false);
+  assert.equal(items.length, 2);
+  assert.match(items[0].textContent, /Too warm: 44.0/);
+  assert.match(items[0].textContent, /since /);
+  assert.doesNotMatch(items[1].textContent, /since /);
+});
+
+test('no active alerts hides the list', async (t) => {
+  const ui = await boot(t);
+  assert.equal(ui.$('alerts').hidden, true);
+});
+
+test('alerts pill shows off, on, or firing', async (t) => {
+  let ui = await boot(t);
+  assert.equal(ui.$('pill-alerts').dataset.state, 'unknown');
+  ui = await boot(t, { status: statusBody({ notifications_enabled: true }) });
+  assert.equal(ui.$('pill-alerts').dataset.state, 'ok');
+  ui = await boot(t, { status: statusBody({ notifications_enabled: true, alerts: [{ key: 'sensor', message: 'x', since: null }] }) });
+  assert.equal(ui.$('pill-alerts').dataset.state, 'bad');
+});
+
+/* ---------- setting-change events on the chart ---------- */
+
+const eventAt = (hoursAgo, detail, kind) => ({ t: iso(Date.now() - hoursAgo * HOUR), kind: kind || 'settings', detail });
+const markerCount = (ui) => {
+  ui.draws.length = 0;
+  ui.win.dispatchEvent(new ui.win.Event('resize'));
+  return ui.draws.filter((d) => d[0] === 'setLineDash' && d[1].length === 2).length;
+};
+
+test('chart draws one marker per setting change inside the window', async (t) => {
+  const events = [eventAt(6, 'Target 38.0 → 39.0' + DEG + 'F'), eventAt(2, 'Forced on → Auto', 'mode'), eventAt(30, 'too old')];
+  const ui = await boot(t, { history: historyBody(points(24.1, 0, 5), null, events) });
+  assert.equal(markerCount(ui), 2);   // the 30h-old one is outside the 24h window
+});
+
+test('no events means no markers', async (t) => {
+  const ui = await boot(t);
+  assert.equal(markerCount(ui), 0);
+});
+
+test('hovering a marker shows what changed, in preference to the reading', async (t) => {
+  const detail = 'Target 38.0 → 39.0' + DEG + 'F';
+  const ui = await boot(t, { history: historyBody(points(24.1, 0, 5), null, [eventAt(6, detail)]) });
+  hover(ui, 452);   // 6h ago: 40 + 550 * 18/24
+  assert.equal(ui.$('tooltip').hidden, false);
+  assert.match(ui.$('tooltip').textContent, /Setting changed/);
+  assert.ok(ui.$('tooltip').textContent.includes(detail));
+  hover(ui, 300);   // well away from the marker: back to a normal reading tooltip
+  assert.match(ui.$('tooltip').textContent, /Target 38\.0/);
+  assert.doesNotMatch(ui.$('tooltip').textContent, /Setting changed/);
 });

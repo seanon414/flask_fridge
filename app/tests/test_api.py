@@ -125,6 +125,91 @@ class ApiTests(unittest.TestCase):
     def test_update_mode_rejects_unknown(self):
         self.assertEqual(self.client.post('/api/mode', json={'mode': 'turbo'}).status_code, 400)
 
+    # --- half-degree targets ---
+
+    def test_half_degree_targets_are_accepted_and_stored_exactly(self):
+        r = self.client.post('/api/settings', json={'target_temp': 38.5, 'hysteresis': 1.0})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(self.client.get('/api/status').get_json()['settings']['target_temp'], 38.5)
+
+    def test_other_fractions_are_rejected(self):
+        for target in (38.3, 38.25, 38.75, 38.01):
+            r = self.client.post('/api/settings', json={'target_temp': target, 'hysteresis': 1.0})
+            self.assertEqual(r.status_code, 400, target)
+
+    # --- events ---
+
+    def events(self, hours=24):
+        return self.client.get('/api/history?hours={}'.format(hours)).get_json()['events']
+
+    def test_changing_settings_logs_an_event(self):
+        self.client.post('/api/settings', json={'target_temp': 40, 'hysteresis': 1.5})
+        [event] = self.events()
+        self.assertEqual(event['kind'], 'settings')
+        self.assertIn('Target 45.0 → 40.0°F', event['detail'])
+        self.assertIn('Swing ±1.0 → ±1.5°F', event['detail'])
+        self.assertTrue(event['t'].endswith('Z'))
+
+    def test_only_the_changed_setting_is_described(self):
+        self.client.post('/api/settings', json={'target_temp': 40, 'hysteresis': 1.0})
+        [event] = self.events()
+        self.assertIn('Target', event['detail'])
+        self.assertNotIn('Swing', event['detail'])
+
+    def test_resaving_the_same_settings_logs_nothing(self):
+        self.client.post('/api/settings', json={'target_temp': 40, 'hysteresis': 1.5})
+        self.client.post('/api/settings', json={'target_temp': 40, 'hysteresis': 1.5})
+        self.assertEqual(len(self.events()), 1)
+
+    def test_rejected_settings_log_nothing(self):
+        self.client.post('/api/settings', json={'target_temp': 38.3, 'hysteresis': 1.0})
+        self.assertEqual(self.events(), [])
+
+    def test_changing_mode_logs_an_event(self):
+        self.client.post('/api/mode', json={'mode': 'on'})
+        self.client.post('/api/mode', json={'mode': 'auto'})
+        details = [e['detail'] for e in self.events()]
+        self.assertEqual(details, ['Auto → Forced on', 'Forced on → Auto'])
+        self.assertEqual({e['kind'] for e in self.events()}, {'mode'})
+
+    def test_selecting_the_current_mode_logs_nothing(self):
+        self.client.post('/api/mode', json={'mode': 'auto'})
+        self.assertEqual(self.events(), [])
+
+    def test_history_only_returns_events_inside_the_window(self):
+        from app.models.temp import Event
+        db.session.add(Event(timestamp=datetime.utcnow() - timedelta(hours=30), kind='mode', detail='old'))
+        db.session.add(Event(timestamp=datetime.utcnow() - timedelta(hours=1), kind='mode', detail='recent'))
+        db.session.commit()
+        self.assertEqual([e['detail'] for e in self.events(24)], ['recent'])
+        self.assertEqual([e['detail'] for e in self.events(48)], ['old', 'recent'])
+
+    # --- alerts in status ---
+
+    def test_status_lists_only_active_alerts(self):
+        from app.models.temp import AlertState
+        db.session.add(AlertState(key='too_warm', active=True, since=datetime.utcnow(),
+                                  message='Too warm: 44.0°F'))
+        db.session.add(AlertState(key='sensor', active=False, message=''))
+        db.session.commit()
+        alerts = self.client.get('/api/status').get_json()['alerts']
+        self.assertEqual([a['key'] for a in alerts], ['too_warm'])
+        self.assertEqual(alerts[0]['message'], 'Too warm: 44.0°F')
+        self.assertTrue(alerts[0]['since'].endswith('Z'))
+
+    def test_status_with_no_alerts(self):
+        self.assertEqual(self.client.get('/api/status').get_json()['alerts'], [])
+
+    def test_status_reports_whether_push_alerts_are_configured(self):
+        import os
+        from unittest import mock
+        with mock.patch.dict(os.environ, {'NTFY_TOPIC': ''}):
+            self.assertFalse(self.client.get('/api/status').get_json()['notifications_enabled'])
+        with mock.patch.dict(os.environ, {'NTFY_TOPIC': 'my-topic'}):
+            data = self.client.get('/api/status').get_json()
+        self.assertTrue(data['notifications_enabled'])
+        self.assertNotIn('my-topic', str(data))      # the topic is a secret; never expose it
+
     # --- csrf / page ---
 
     def test_post_requires_csrf_token_when_enabled(self):

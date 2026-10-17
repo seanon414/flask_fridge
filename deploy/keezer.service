@@ -5,6 +5,7 @@ After=network.target
 [Service]
 User=pi
 WorkingDirectory=/home/pi/Documents/code/flask_fridge
+EnvironmentFile=-/home/pi/Documents/code/flask_fridge/.env
 ExecStart=/home/pi/Documents/code/flask_fridge/venv/bin/python -m app.scripts.controller
 Restart=always
 RestartSec=10

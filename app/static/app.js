@@ -11,7 +11,8 @@
     history: { points: [], stats: {}, hours: 24 },
     hours: 24,
     dirty: false,
-    hover: null
+    hover: null,
+    hoverEvent: null
   };
 
   /* ---------- helpers ---------- */
@@ -94,19 +95,24 @@
     else if (s.fridge_on === false) { st.dataset.state = 'off'; stText.textContent = 'Idle'; }
     else { st.dataset.state = 'unknown'; stText.textContent = 'Unknown'; }
 
-    $('fact-target').textContent = cfg.target_temp;
+    $('fact-target').textContent = fmt(cfg.target_temp, 1);
     $('fact-range').textContent = fmt(low) + '–' + fmt(high) + '°';
     $('fact-mode').textContent = { auto: 'Auto', on: 'Forced on', off: 'Forced off' }[cfg.mode] || cfg.mode;
     $('fact-updated').textContent = ago(s.age_seconds);
 
     setPill('pill-controller', s.controller_ok);
     setPill('pill-sensor', s.sensor_ok);
+    var alertsPill = $('pill-alerts');
+    alertsPill.dataset.state = !s.notifications_enabled ? 'unknown' : (s.alerts && s.alerts.length ? 'bad' : 'ok');
+    alertsPill.title = s.notifications_enabled ? 'Push alerts are on' : 'Push alerts are off (set NTFY_TOPIC to enable)';
 
     renderBanner(s, cfg);
+    renderAlerts(s.alerts || []);
     renderMode(cfg.mode);
+    updateTitle(s, live);
 
     if (!state.dirty) {
-      $('target').value = cfg.target_temp;
+      $('target').value = fmt(cfg.target_temp, 1);
       $('hysteresis').value = fmt(cfg.hysteresis, 1);
       updateBandHint();
     }
@@ -115,6 +121,31 @@
 
   function setPill(id, ok) {
     $(id).dataset.state = ok ? 'ok' : 'bad';
+  }
+
+  // Browser tab title: "38.1°F · Keezer", so a pinned tab doubles as a gauge.
+  function updateTitle(s, live) {
+    var warn = (s.alerts && s.alerts.length) || !s.controller_ok || !s.sensor_ok;
+    var temp = live ? fmt(s.temp_f, 1) + '°F · ' : '';
+    document.title = (warn ? '⚠ ' : '') + temp + 'Keezer';
+  }
+
+  function renderAlerts(list) {
+    var el = $('alerts');
+    el.textContent = '';
+    list.forEach(function (a) {
+      var li = document.createElement('li');
+      var msg = document.createElement('span');
+      msg.textContent = a.message;
+      li.appendChild(msg);
+      if (a.since) {
+        var since = document.createElement('small');
+        since.textContent = 'since ' + new Date(a.since).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+        li.appendChild(since);
+      }
+      el.appendChild(li);
+    });
+    el.hidden = list.length === 0;
   }
 
   function renderBanner(s, cfg) {
@@ -224,6 +255,9 @@
     var hours = state.history.hours || state.hours;
     var tMax = Date.now();
     var tMin = tMax - hours * 3600 * 1000;
+    var evs = (state.history.events || []).map(function (e) {
+      return { t: Date.parse(e.t), kind: e.kind, detail: e.detail };
+    }).filter(function (e) { return e.t >= tMin && e.t <= tMax; });
 
     // Scale to temperatures and the *current* band, so an old target
     // setting doesn't stretch the axis. Older bands are clipped.
@@ -246,9 +280,10 @@
     var pw = w - m.l - m.r, ph = h - m.t - m.b;
     var X = function (t) { return m.l + (t - tMin) / (tMax - tMin) * pw; };
     var Y = function (v) { return m.t + (1 - (v - lo) / (hi - lo)) * ph; };
-    layout = { pts: pts, X: X, Y: Y, m: m, pw: pw, ph: ph, w: w, h: h };
+    layout = { pts: pts, events: evs, X: X, Y: Y, m: m, pw: pw, ph: ph, w: w, h: h };
 
-    var cText = css('--muted'), cLine = css('--line'), cAccent = css('--accent'), cOn = css('--on');
+    var cText = css('--muted'), cLine = css('--line'), cAccent = css('--accent'), cOn = css('--on'),
+        cEvent = css('--event');
 
     ctx.font = '11px system-ui, sans-serif';
     ctx.textBaseline = 'middle';
@@ -325,6 +360,22 @@
     }
     ctx.globalAlpha = 1;
 
+    // setting changes: dashed vertical line with a diamond at the top
+    evs.forEach(function (e, idx) {
+      var ex = Math.round(X(e.t)) + 0.5;
+      var hot = state.hoverEvent === idx;
+      ctx.save();
+      ctx.strokeStyle = cEvent; ctx.fillStyle = cEvent;
+      ctx.globalAlpha = hot ? 1 : 0.75; ctx.lineWidth = hot ? 2 : 1;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.moveTo(ex, m.t); ctx.lineTo(ex, m.t + ph); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(ex, m.t + 1); ctx.lineTo(ex + 5, m.t + 6); ctx.lineTo(ex, m.t + 11); ctx.lineTo(ex - 5, m.t + 6);
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+    });
+
     // temperature line
     ctx.strokeStyle = cAccent; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
     splitSegments(pts, maxGap, function (p) { return p.temp !== null; }).forEach(function (seg) {
@@ -347,7 +398,7 @@
         ctx.beginPath(); ctx.arc(hx, Y(hp.temp), 4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
       }
     }
-    positionTooltip(hp);
+    positionTooltip(hp, state.hoverEvent !== null ? evs[state.hoverEvent] : null);
   }
 
   function hatch(color) {
@@ -372,20 +423,30 @@
     return out;
   }
 
-  function positionTooltip(p) {
+  function positionTooltip(p, ev) {
     var tip = $('tooltip');
-    if (!p || !layout) { tip.hidden = true; return; }
-    var when = new Date(p.t).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+    var subject = ev || p;
+    if (!subject || !layout) { tip.hidden = true; return; }
+    var when = new Date(subject.t).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
     tip.innerHTML = '';
-    var b = document.createElement('b');
-    b.textContent = p.temp === null ? 'No reading' : fmt(p.temp, 1) + '°F';
-    var l1 = document.createElement('div'); l1.textContent = when;
-    var l2 = document.createElement('div');
-    l2.textContent = 'Target ' + (p.target === null || p.target === undefined ? '--' : p.target + '°') +
-                     ' · ' + (p.on === null ? 'unknown' : p.on ? 'cooling' : 'idle');
-    tip.appendChild(b); tip.appendChild(l1); tip.appendChild(l2);
+    if (ev) {
+      var eb = document.createElement('b');
+      eb.className = 'event-title';
+      eb.textContent = 'Setting changed';
+      var e1 = document.createElement('div'); e1.textContent = ev.detail;
+      var e2 = document.createElement('div'); e2.textContent = when;
+      tip.appendChild(eb); tip.appendChild(e1); tip.appendChild(e2);
+    } else {
+      var b = document.createElement('b');
+      b.textContent = p.temp === null ? 'No reading' : fmt(p.temp, 1) + '°F';
+      var l1 = document.createElement('div'); l1.textContent = when;
+      var l2 = document.createElement('div');
+      l2.textContent = 'Target ' + (p.target === null || p.target === undefined ? '--' : fmt(p.target, 1) + '°') +
+                       ' · ' + (p.on === null ? 'unknown' : p.on ? 'cooling' : 'idle');
+      tip.appendChild(b); tip.appendChild(l1); tip.appendChild(l2);
+    }
     tip.hidden = false;
-    var x = layout.X(p.t);
+    var x = layout.X(subject.t);
     var left = x + 12;
     if (left + tip.offsetWidth > layout.w - 4) { left = x - tip.offsetWidth - 12; }
     tip.style.left = Math.max(4, left) + 'px';
@@ -401,13 +462,24 @@
       var d = Math.abs(layout.X(p.t) - x);
       if (d < bestD) { bestD = d; best = i; }
     });
-    state.hover = bestD <= 30 ? best : null;  // ignore the empty "no data" area
+    var bestEvent = null, bestEventD = Infinity;
+    (layout.events || []).forEach(function (e, i) {
+      var d = Math.abs(layout.X(e.t) - x);
+      if (d < bestEventD) { bestEventD = d; bestEvent = i; }
+    });
+    if (bestEventD <= 12) {            // a setting-change marker wins over the line
+      state.hoverEvent = bestEvent;
+      state.hover = null;
+    } else {
+      state.hoverEvent = null;
+      state.hover = bestD <= 30 ? best : null;  // ignore the empty "no data" area
+    }
     draw();
   }
 
   canvas.addEventListener('pointermove', onPointer);
   canvas.addEventListener('pointerdown', onPointer);
-  canvas.addEventListener('pointerleave', function () { state.hover = null; draw(); });
+  canvas.addEventListener('pointerleave', function () { state.hover = null; state.hoverEvent = null; draw(); });
   window.addEventListener('resize', draw);
   if (window.ResizeObserver) { new ResizeObserver(draw).observe(canvas); }
 
@@ -415,13 +487,14 @@
 
   function readInputs() {
     return {
-      target_temp: parseInt($('target').value, 10),
+      target_temp: parseFloat($('target').value),
       hysteresis: parseFloat($('hysteresis').value)
     };
   }
 
   function validInputs(v) {
     return !isNaN(v.target_temp) && v.target_temp >= 20 && v.target_temp <= 70 &&
+           Math.abs(v.target_temp * 2 - Math.round(v.target_temp * 2)) < 1e-9 &&
            !isNaN(v.hysteresis) && v.hysteresis >= 0.5 && v.hysteresis <= 10;
   }
 
@@ -429,7 +502,7 @@
     var v = readInputs();
     var hint = $('band-hint');
     if (!validInputs(v)) {
-      hint.textContent = 'Target must be 20–70°F and swing 0.5–10°F.';
+      hint.textContent = 'Target must be 20–70°F in half-degree steps, and swing 0.5–10°F.';
       return;
     }
     hint.textContent = 'Starts cooling above ' + fmt(v.target_temp + v.hysteresis) +
@@ -449,7 +522,7 @@
       if (isNaN(cur)) { cur = parseFloat(input.min); }
       var next = cur + parseFloat(btn.dataset.step);
       next = Math.min(parseFloat(input.max), Math.max(parseFloat(input.min), next));
-      input.value = btn.dataset.for === 'target' ? Math.round(next) : (Math.round(next * 2) / 2).toFixed(1);
+      input.value = (Math.round(next * 2) / 2).toFixed(1);
       markDirty();
     });
   });
@@ -485,6 +558,7 @@
     if (!btn) { return; }
     state.hours = parseInt(btn.dataset.hours, 10);
     state.hover = null;
+    state.hoverEvent = null;
     this.querySelectorAll('button').forEach(function (b) {
       var on = b === btn;
       b.classList.toggle('active', on);
