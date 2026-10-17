@@ -106,7 +106,11 @@ python -m app.scripts.controller    # run as a systemd service on the Pi
 - Every cycle (30s) is logged to the `reading` table; rows older than 90 days are pruned.
 - Overridable via env: `CODESEND_PATH`, `FRIDGE_CODE_ON`, `FRIDGE_CODE_OFF`, `SECRET_KEY`, `DATABASE_URL`.
 
-Tests: `python -m unittest discover -s app/tests -t .`
+Tests (API tests need an in-memory DB so they never touch app.db):
+
+```
+DATABASE_URL=sqlite:// python -m unittest discover -s app/tests -t .
+```
 
 ## Services (Raspberry Pi)
 
