@@ -128,7 +128,7 @@ class AlertManagerTests(CleanEnvMixin, unittest.TestCase):
 
     def row(self, key='too_warm'):
         from app.models.temp import AlertState
-        return AlertState.query.get(key)
+        return db.session.get(AlertState, key)
 
     def test_notifies_once_when_a_condition_starts(self):
         self.manager.update('too_warm', True, 'Too warm', self.now)
@@ -350,6 +350,98 @@ class WatchdogTests(CleanEnvMixin, unittest.TestCase):
         self.reading(3)
         self.assertFalse(self.watchdog.check(self.manager, self.now, minutes=5))
         self.assertTrue(self.watchdog.check(self.manager, self.now, minutes=2))
+
+
+@unittest.skipUnless(IN_MEMORY, 'set DATABASE_URL=sqlite:// to run alert tests')
+class EndToEndAlertTests(CleanEnvMixin, unittest.TestCase):
+    """The real controller loop wired to the real alert manager, as on the Pi.
+
+    Only the sensor, the RF switch and the notification sender are fake. Each
+    controller.step() is one 30 s cycle; history is back-filled so a sustained
+    problem doesn't need 30 real minutes.
+    """
+
+    def setUp(self):
+        from app.models.temp import Reading, get_settings  # noqa: F401
+        from app.scripts.alerts import AlertManager
+        from app.scripts.controller import Controller
+        self.clean_env()
+        self.ctx = app.app_context()
+        self.ctx.push()
+        db.drop_all()
+        db.create_all()
+
+        settings = get_settings()
+        settings.target_temp = 38.0
+        settings.hysteresis = 1.0
+        db.session.commit()
+
+        self.temp = 38.0
+        self.notifier = FakeNotifier()
+        self.controller = Controller(
+            sensor=lambda: (None, None) if self.temp is None else ((self.temp - 32) / 1.8, self.temp),
+            switch=lambda on: True,
+            clock=lambda: 1000.0,
+            alert_manager=AlertManager(self.notifier, remind_hours=6))
+        self.client = app.test_client()
+
+    def tearDown(self):
+        db.session.remove()
+        db.drop_all()
+        self.ctx.pop()
+
+    def backfill(self, minutes, temp):
+        from app.models.temp import Reading
+        now = datetime.utcnow()
+        for i in range(int(minutes * 2), 0, -1):          # one reading per 30 s, oldest first
+            db.session.add(Reading(timestamp=now - timedelta(seconds=30 * i), temp_f=temp,
+                                   target_f=38.0, fridge_on=False))
+        db.session.commit()
+
+    def shown_in_ui(self):
+        return [a['key'] for a in self.client.get('/api/status').get_json()['alerts']]
+
+    def titles(self):
+        return [title for title, _, _ in self.notifier.sent]
+
+    def test_a_sustained_warm_spell_alerts_once_and_then_resolves(self):
+        self.backfill(35, 44.0)
+        self.temp = 44.0
+        self.controller.step()
+        self.assertEqual(self.titles(), ['Keezer too warm'])
+        self.assertEqual(self.shown_in_ui(), ['too_warm'])
+
+        self.controller.step()
+        self.controller.step()
+        self.assertEqual(self.titles(), ['Keezer too warm'])        # not repeated every cycle
+
+        self.temp = 38.0                                             # it comes back down
+        self.controller.step()
+        self.assertEqual(self.titles(), ['Keezer too warm', 'Keezer too warm: resolved'])
+        self.assertEqual(self.shown_in_ui(), [])
+
+    def test_a_sensor_outage_alerts(self):
+        self.backfill(12, None)
+        self.temp = None
+        self.controller.step()
+        self.assertEqual(self.titles(), ['Keezer sensor failure'])
+        self.assertEqual(self.shown_in_ui(), ['sensor'])
+
+    def test_a_healthy_freezer_sends_nothing(self):
+        self.backfill(40, 38.2)
+        self.temp = 38.2
+        for _ in range(3):
+            self.controller.step()
+        self.assertEqual(self.notifier.sent, [])
+        self.assertEqual(self.shown_in_ui(), [])
+
+    def test_the_ui_still_shows_alerts_when_push_is_not_configured(self):
+        self.notifier.enabled = False
+        self.backfill(35, 44.0)
+        self.temp = 44.0
+        self.controller.step()
+        self.assertEqual(self.notifier.sent, [])
+        self.assertEqual(self.shown_in_ui(), ['too_warm'])
 
 
 if __name__ == '__main__':

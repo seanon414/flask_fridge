@@ -43,7 +43,7 @@ class AlertState(db.Model):
 
 def get_settings():
     """Return the settings row, creating it with defaults if it doesn't exist."""
-    settings = Temp.query.get(1)
+    settings = db.session.get(Temp, 1)
     if settings is None:
         settings = Temp(id=1, target_temp=45.0, hysteresis=1.0,
                         min_cycle_seconds=300, mode='auto')

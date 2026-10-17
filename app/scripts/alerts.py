@@ -95,7 +95,7 @@ class AlertManager(object):
         from app.models.temp import AlertState
 
         now = now or datetime.utcnow()
-        row = AlertState.query.get(key)
+        row = db.session.get(AlertState, key)
         if row is None:
             row = AlertState(key=key, active=False, message='')
             db.session.add(row)
