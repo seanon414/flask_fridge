@@ -1,4 +1,7 @@
-from flask_wtf import Form
+try:
+    from flask_wtf import FlaskForm as Form
+except ImportError:  # Flask-WTF < 0.13
+    from flask_wtf import Form
 from wtforms import FloatField, IntegerField, TextAreaField, validators
 
 

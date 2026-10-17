@@ -23,7 +23,6 @@ app = Flask(__name__)
 app.config.from_object(Config)
 app.config['SECRET_KEY'] = SECRET_KEY
 db = SQLAlchemy(app)
-db.init_app(app)
 migrate = Migrate(app, db)
 bootstrap = Bootstrap(app)
 nav.init_app(app)
