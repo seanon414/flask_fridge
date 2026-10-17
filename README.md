@@ -86,3 +86,24 @@ dtoverlay=w1-gpio
 ```
 sudo reboot
 ```
+
+## Controller
+
+The thermostat logic lives in one long-running process that replaces the old
+cron + `lager.py` setup. The web app only edits settings in the database; the
+controller is the only thing that talks to the RF transmitter.
+
+```
+export FLASK_APP=app
+flask db upgrade                    # adds hysteresis/mode columns and the reading log
+python -m app.scripts.controller    # run as a systemd service on the Pi
+```
+
+- Turns on above `target + hysteresis`, off below `target - hysteresis`.
+- Won't switch state again within `min_cycle_seconds` (default 300) of the last change.
+- If the sensor can't be read it holds the current state and logs a warning.
+- Mode `auto` follows the thermostat; `on`/`off` force the fridge (set from the web UI).
+- Every cycle (30s) is logged to the `reading` table; rows older than 90 days are pruned.
+- Overridable via env: `CODESEND_PATH`, `FRIDGE_CODE_ON`, `FRIDGE_CODE_OFF`, `SECRET_KEY`, `DATABASE_URL`.
+
+Tests: `python -m unittest discover -s app/tests -t .`

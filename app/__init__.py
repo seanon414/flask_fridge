@@ -1,6 +1,6 @@
 import os
 from flask import Flask
-from config import Config
+from .config import Config
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_bootstrap import Bootstrap
@@ -16,7 +16,7 @@ nav.register_element(
         View('Home', 'index.index')))
 
 basedir = os.path.abspath(os.path.dirname(__file__))
-SECRET_KEY = os.urandom(32)
+SECRET_KEY = os.environ.get('SECRET_KEY') or os.urandom(32)
 
 app = Flask(__name__)
 

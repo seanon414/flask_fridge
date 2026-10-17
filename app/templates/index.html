@@ -19,13 +19,19 @@
                     {{ form.csrf_token }}
                     <div class="flex-container">
                         <div>{{ wtf.form_field(form.target_temp) }}</div>
+                        <div>{{ wtf.form_field(form.hysteresis) }}</div>
                         <div>{{ wtf.form_field(form.current_temp) }}</div>
                     </div>
+                    <p class="text-center">
+                        Mode: <strong>{{ mode }}</strong> &middot;
+                        Fridge: <strong>{{ 'unknown' if fridge_on is none else ('on' if fridge_on else 'off') }}</strong>
+                    </p>
                     <div class="flex-container">
-		        <div><input type="submit" name="update_target" value="Update Target"></div>
+                        <div><input type="submit" name="update_target" value="Update Target"></div>
                         <div><input type="submit" name="refresh_current_temp" value="Refresh Current Temp"></div>
-                        <div><input type="submit" name="turn_off_fridge" value="Fridge Off"></div>
-                        <div><input type="submit" name="turn_on_fridge" value="Fridge On"></div>
+                        <div><input type="submit" name="auto_mode" value="Auto"></div>
+                        <div><input type="submit" name="turn_off_fridge" value="Force Off"></div>
+                        <div><input type="submit" name="turn_on_fridge" value="Force On"></div>
                     </div>
                 </form>
             </div>
