@@ -196,3 +196,43 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .toast[data-level="bad"] { border-color: #5a2d36; color: #ffc2c2; }
 
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+
+/* ---- wall display: open /?display=1 ----
+   Read-only, scales with the screen, and fills it. Meant for an always-on
+   monitor; the controls are hidden so nothing can be changed by accident. */
+html.display { font-size: clamp(16px, 1.15vw, 32px); }
+.display body { height: 100vh; overflow: hidden; }
+.display.idle, .display.idle * { cursor: none; }
+
+.display .topbar { max-width: none; padding: 1.6vh 2vw 0; }
+.display h1 { font-size: 1.7rem; }
+.display .pill { font-size: 1rem; padding: .35rem .9rem; gap: .5rem; }
+.display .pill i { width: .6rem; height: .6rem; }
+
+.display .layout {
+  max-width: none; height: calc(100vh - 5.2rem); padding: 1.2vh 2vw 2vh; gap: 1.6vh;
+  display: flex; flex-direction: column;
+}
+.display .layout > * { flex: none; }
+.display .controls { display: none; }
+
+.display .hero { grid-template-columns: 1fr 1fr; align-items: center; padding: 1.2vh 2vw; }
+.display .temp { font-size: 14vh; }
+.display .label { font-size: .95rem; }
+.display .delta { font-size: 1.5rem; }
+.display .state { font-size: 1.6rem; padding: .5rem 1.2rem; margin-bottom: 1.4vh; }
+.display .facts { grid-template-columns: repeat(4, auto); gap: 1.4vh 1.4vw; }
+.display .facts dt { font-size: .95rem; }
+.display .facts dd { font-size: 1.7rem; }
+
+.display .chart-card { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 1.4vh 1.4vw; }
+.display .chart-card .card-head h2 { font-size: 1.3rem; }
+.display .seg button { font-size: 1.05rem; min-height: 0; padding: .45rem 1rem; }
+.display .chart-wrap { flex: 1; height: auto; min-height: 0; }
+.display .legend { font-size: 1rem; margin: 1vh 0; }
+.display .stats { padding-top: 1vh; }
+.display .stats dt { font-size: .95rem; }
+.display .stats dd { font-size: 1.5rem; }
+.display .banner { font-size: 1.3rem; }
+.display .alerts li { font-size: 1.3rem; }
+.display .tooltip { font-size: 1.1rem; }

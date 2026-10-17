@@ -3,9 +3,27 @@
 
   var STATUS_EVERY_MS = 5000;
   var HISTORY_EVERY_MS = 60000;
+  var DEFAULT_HOURS = 24;
   var $ = function (id) { return document.getElementById(id); };
 
+  // Wall display (/?display=1): bigger, read-only, hides the mouse cursor when idle.
+  var root = document.documentElement;
+  var DISPLAY = /[?&]display(=1|=true|=on)?(&|$)/.test(window.location.search);
+  if (DISPLAY) { root.classList.add('display'); hideCursorWhenIdle(); }
+
+  function hideCursorWhenIdle() {
+    var timer = null;
+    function wake() {
+      root.classList.remove('idle');
+      clearTimeout(timer);
+      timer = setTimeout(function () { root.classList.add('idle'); }, 5000);
+    }
+    ['mousemove', 'mousedown', 'keydown'].forEach(function (name) { document.addEventListener(name, wake); });
+    wake();
+  }
+
   var state = {
+    version: null,
     settings: null,
     status: null,
     history: { points: [], stats: {}, hours: 24 },
@@ -183,9 +201,24 @@
     $('mode-hint').textContent = MODE_HINTS[mode] || '';
   }
 
+  // The server reports a version that changes when it restarts or a page file is
+  // updated. If it changes under us, reload, so a wall display never goes stale.
+  // (Unless you're mid-edit; the next poll tries again.)
+  function reloadPage() {
+    if (typeof window.keezerReload === 'function') { window.keezerReload(); }   // test seam
+    else { window.location.reload(); }
+  }
+
+  function checkVersion(version) {
+    if (!version) { return; }
+    if (state.version === null) { state.version = version; }
+    else if (version !== state.version && !state.dirty) { reloadPage(); }
+  }
+
   function refreshStatus() {
     return api('/api/status').then(function (data) {
       state.status = data;
+      checkVersion(data.version);
       render();
     }).catch(function () {
       setPill('pill-controller', false);
@@ -276,7 +309,10 @@
     lo = Math.floor(lo / step) * step;
     hi = Math.ceil(hi / step) * step;
 
-    var m = { l: 40, r: 10, t: 10, b: 26 };
+    // Everything scales with the chart's width: 11px text on a phone, up to 20px on a wall display.
+    var fs = Math.max(11, Math.min(20, Math.round(w / 60)));
+    var k = fs / 11;
+    var m = { l: Math.round(fs * 3.64), r: Math.round(fs * 0.91), t: Math.round(fs * 0.91), b: Math.round(fs * 2.36) };
     var pw = w - m.l - m.r, ph = h - m.t - m.b;
     var X = function (t) { return m.l + (t - tMin) / (tMax - tMin) * pw; };
     var Y = function (v) { return m.t + (1 - (v - lo) / (hi - lo)) * ph; };
@@ -285,7 +321,7 @@
     var cText = css('--muted'), cLine = css('--line'), cAccent = css('--accent'), cOn = css('--on'),
         cEvent = css('--event');
 
-    ctx.font = '11px system-ui, sans-serif';
+    ctx.font = fs + 'px system-ui, sans-serif';
     ctx.textBaseline = 'middle';
 
     // horizontal grid + y labels
@@ -305,7 +341,7 @@
     for (var i = 0; i <= labels; i++) {
       var tt = tMin + (tMax - tMin) * i / labels;
       ctx.textAlign = i === 0 ? 'left' : i === labels ? 'right' : 'center';
-      ctx.fillText(timeLabel(tt, hours), X(tt), h - m.b + 7);
+      ctx.fillText(timeLabel(tt, hours), X(tt), h - m.b + Math.round(7 * k));
     }
 
     // typical sample spacing, to detect gaps (controller down)
@@ -348,6 +384,16 @@
       ctx.closePath(); ctx.fill();
     });
 
+    // dashed target line through the middle of the band
+    ctx.save();
+    ctx.strokeStyle = cAccent; ctx.globalAlpha = 0.55; ctx.lineWidth = Math.max(1, k); ctx.setLineDash([6, 4]);
+    segs.forEach(function (seg) {
+      ctx.beginPath();
+      seg.forEach(function (p, idx) { idx ? ctx.lineTo(X(p.t), Y(p.target)) : ctx.moveTo(X(p.t), Y(p.target)); });
+      ctx.stroke();
+    });
+    ctx.restore();
+
     // fridge-running strip along the bottom
     ctx.fillStyle = cOn; ctx.globalAlpha = 0.85;
     for (var n = 0; n < pts.length; n++) {
@@ -355,7 +401,7 @@
         var x0 = X(pts[n].t);
         var nxt = pts[n + 1];
         var x1 = nxt && nxt.t - pts[n].t <= maxGap ? X(nxt.t) : x0 + Math.max(2, pw * typical / (tMax - tMin));
-        ctx.fillRect(x0, m.t + ph - 5, Math.max(1.5, x1 - x0), 5);
+        ctx.fillRect(x0, m.t + ph - 5 * k, Math.max(1.5, x1 - x0), 5 * k);
       }
     }
     ctx.globalAlpha = 1;
@@ -371,13 +417,13 @@
       ctx.beginPath(); ctx.moveTo(ex, m.t); ctx.lineTo(ex, m.t + ph); ctx.stroke();
       ctx.setLineDash([]);
       ctx.beginPath();
-      ctx.moveTo(ex, m.t + 1); ctx.lineTo(ex + 5, m.t + 6); ctx.lineTo(ex, m.t + 11); ctx.lineTo(ex - 5, m.t + 6);
+      ctx.moveTo(ex, m.t + k); ctx.lineTo(ex + 5 * k, m.t + 6 * k); ctx.lineTo(ex, m.t + 11 * k); ctx.lineTo(ex - 5 * k, m.t + 6 * k);
       ctx.closePath(); ctx.fill();
       ctx.restore();
     });
 
     // temperature line
-    ctx.strokeStyle = cAccent; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.strokeStyle = cAccent; ctx.lineWidth = 2 * k; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
     splitSegments(pts, maxGap, function (p) { return p.temp !== null; }).forEach(function (seg) {
       ctx.beginPath();
       seg.forEach(function (p, idx) { idx ? ctx.lineTo(X(p.t), Y(p.temp)) : ctx.moveTo(X(p.t), Y(p.temp)); });
@@ -395,7 +441,7 @@
       ctx.globalAlpha = 1;
       if (hp.temp !== null) {
         ctx.fillStyle = css('--bg'); ctx.strokeStyle = cAccent; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.arc(hx, Y(hp.temp), 4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.arc(hx, Y(hp.temp), 4 * k, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
       }
     }
     positionTooltip(hp, state.hoverEvent !== null ? evs[state.hoverEvent] : null);
@@ -553,18 +599,30 @@
     }).catch(function (err) { toast(err.message, 'bad'); });
   });
 
-  $('range').addEventListener('click', function (ev) {
-    var btn = ev.target.closest('button[data-hours]');
-    if (!btn) { return; }
-    state.hours = parseInt(btn.dataset.hours, 10);
+  // After a few idle minutes on another range, go back to the 24h overview, so a
+  // wall display (or a forgotten tab) doesn't stay stuck on 1h.
+  var rangeTimer = null;
+
+  function selectRange(hours) {
+    state.hours = hours;
     state.hover = null;
     state.hoverEvent = null;
-    this.querySelectorAll('button').forEach(function (b) {
-      var on = b === btn;
+    $('range').querySelectorAll('button').forEach(function (b) {
+      var on = parseInt(b.dataset.hours, 10) === hours;
       b.classList.toggle('active', on);
       b.setAttribute('aria-selected', on ? 'true' : 'false');
     });
     refreshHistory();
+    clearTimeout(rangeTimer);
+    if (hours !== DEFAULT_HOURS) {
+      rangeTimer = setTimeout(function () { selectRange(DEFAULT_HOURS); },
+                              window.keezerIdleMs || 5 * 60 * 1000);   // keezerIdleMs: test seam
+    }
+  }
+
+  $('range').addEventListener('click', function (ev) {
+    var btn = ev.target.closest('button[data-hours]');
+    if (btn) { selectRange(parseInt(btn.dataset.hours, 10)); }
   });
 
   /* ---------- polling ---------- */

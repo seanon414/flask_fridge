@@ -1,7 +1,8 @@
 import os
+import time
 from datetime import datetime, timedelta
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 
 from app import db
 from app.models.temp import MODES, AlertState, Event, Reading, get_settings
@@ -18,6 +19,27 @@ TARGET_RANGE = (20.0, 70.0)
 HYSTERESIS_RANGE = (0.5, 10.0)
 
 MODE_LABELS = {'auto': 'Auto', 'on': 'Forced on', 'off': 'Forced off'}
+
+
+_STARTED = int(time.time())
+
+
+def _asset_version():
+    """Changes whenever the server restarts or a page/script/style file changes.
+
+    The page polls this and reloads itself when it differs from the one it
+    loaded with, so an always-on wall display picks up updates by itself.
+    """
+    newest = 0
+    for folder in (current_app.static_folder,
+                   os.path.join(current_app.root_path, current_app.template_folder or 'templates')):
+        try:
+            for entry in os.scandir(folder):
+                if entry.is_file():
+                    newest = max(newest, int(entry.stat().st_mtime))
+        except OSError:
+            continue
+    return '{}.{}'.format(_STARTED, newest)
 
 
 def _iso(dt):
@@ -55,6 +77,7 @@ def status():
         'alerts': [{'key': a.key, 'message': a.message,
                     'since': _iso(a.since) if a.since else None} for a in active_alerts],
         'notifications_enabled': bool(os.environ.get('NTFY_TOPIC', '').strip()),
+        'version': _asset_version(),
     })
 
 

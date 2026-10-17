@@ -159,3 +159,30 @@ Each alert is sent once, repeated after 6 h while it lasts, and followed by a
 
 Target, swing and mode changes made in the UI are logged (`event` table) and drawn
 as dashed markers on the history chart; hover one to see what changed.
+
+## Wall display (a monitor on the Pi)
+
+Open `http://localhost:5000/?display=1` for a big, read-only view that fills the
+screen: large temperature, a tall history chart, no controls (change settings from
+your phone or laptop). It reloads itself when the server is updated, returns to the
+24h chart after 5 idle minutes, and hides the mouse cursor when idle.
+
+To start it automatically in a full-screen kiosk browser on Raspberry Pi OS
+"Bullseye" (check with `cat /etc/os-release`; the desktop uses LXDE and X11):
+
+```
+mkdir -p ~/.config/lxsession/LXDE-pi
+cp /etc/xdg/lxsession/LXDE-pi/autostart ~/.config/lxsession/LXDE-pi/autostart
+cat >> ~/.config/lxsession/LXDE-pi/autostart <<'EOT'
+@xset s off
+@xset -dpms
+@xset s noblank
+@bash -c 'until curl -sf http://localhost:5000/api/status >/dev/null; do sleep 2; done; exec chromium-browser --kiosk --noerrdialogs --disable-infobars --disable-session-crashed-bubble --check-for-update-interval=31536000 "http://localhost:5000/?display=1"'
+EOT
+sudo reboot
+```
+
+The `xset` lines stop the screen going blank, and the `until` loop waits for the web
+service to come up so the browser never starts on an error page. To leave kiosk mode,
+press `Alt+F4`, or from another machine run `ssh pi@<ip> pkill chromium`. On the newer
+"Bookworm" OS (Wayland) the autostart file is different; ask and we'll adapt it.

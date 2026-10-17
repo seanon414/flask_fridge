@@ -210,6 +210,33 @@ class ApiTests(unittest.TestCase):
         self.assertTrue(data['notifications_enabled'])
         self.assertNotIn('my-topic', str(data))      # the topic is a secret; never expose it
 
+    # --- version (lets the wall display reload itself after an update) ---
+
+    def version(self):
+        return self.client.get('/api/status').get_json()['version']
+
+    def test_status_includes_a_stable_version(self):
+        first, second = self.version(), self.version()
+        self.assertRegex(first, r'^\d+\.\d+$')
+        self.assertEqual(first, second)
+
+    def test_version_changes_when_a_static_file_changes(self):
+        import os
+        import time
+        before = self.version()
+        probe = os.path.join(app.static_folder, '_version_probe.tmp')
+        try:
+            with open(probe, 'w') as handle:
+                handle.write('x')
+            future = time.time() + 3600
+            os.utime(probe, (future, future))
+            after = self.version()
+        finally:
+            if os.path.exists(probe):
+                os.remove(probe)
+        self.assertNotEqual(before, after)
+        self.assertEqual(self.version(), before)    # and back once the file is gone
+
     # --- csrf / page ---
 
     def test_post_requires_csrf_token_when_enabled(self):

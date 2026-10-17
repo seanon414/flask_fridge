@@ -42,7 +42,8 @@ function statusBody(o) {
     controller_ok: true,
     sensor_ok: true,
     alerts: [],
-    notifications_enabled: false
+    notifications_enabled: false,
+    version: 'v1'
   }, o);
 }
 
@@ -77,8 +78,9 @@ async function boot(t, opts) {
   };
   const calls = [];
   const draws = [];
+  const reloads = { count: 0 };
 
-  const dom = new JSDOM(HTML, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/' });
+  const dom = new JSDOM(HTML, { runScripts: 'outside-only', pretendToBeVisual: true, url: opts.url || 'http://localhost/' });
   const win = dom.window;
   t.after(() => win.close());
 
@@ -91,7 +93,7 @@ async function boot(t, opts) {
     set(target, prop, value) { target[prop] = value; return true; }
   });
   win.HTMLCanvasElement.prototype.getContext = () => ctx;
-  Object.defineProperty(win.HTMLCanvasElement.prototype, 'clientWidth', { get: () => 600 });
+  Object.defineProperty(win.HTMLCanvasElement.prototype, 'clientWidth', { get: () => opts.canvasWidth || 600 });
   Object.defineProperty(win.HTMLCanvasElement.prototype, 'clientHeight', { get: () => 300 });
 
   win.fetch = (url, init) => {
@@ -117,13 +119,16 @@ async function boot(t, opts) {
     return Promise.resolve({ ok: res.status < 400, status: res.status, json: () => Promise.resolve(res.body) });
   };
 
+  win.keezerReload = () => { reloads.count += 1; };
+  if (opts.idleMs) { win.keezerIdleMs = opts.idleMs; }
+
   win.eval(APP_JS);
   await settle();
 
   const $ = (id) => win.document.getElementById(id);
   const click = (selector) => { win.document.querySelector(selector).click(); };
   const posts = () => calls.filter((c) => c.method === 'POST');
-  return { win, $, click, calls, posts, draws, state, settle };
+  return { win, $, click, calls, posts, draws, state, settle, reloads, ctx };
 }
 
 /* ---------- status rendering ---------- */
@@ -422,7 +427,7 @@ const eventAt = (hoursAgo, detail, kind) => ({ t: iso(Date.now() - hoursAgo * HO
 const markerCount = (ui) => {
   ui.draws.length = 0;
   ui.win.dispatchEvent(new ui.win.Event('resize'));
-  return ui.draws.filter((d) => d[0] === 'setLineDash' && d[1].length === 2).length;
+  return ui.draws.filter((d) => d[0] === 'setLineDash' && d[1].join() === '3,3').length;
 };
 
 test('chart draws one marker per setting change inside the window', async (t) => {
@@ -446,4 +451,105 @@ test('hovering a marker shows what changed, in preference to the reading', async
   hover(ui, 300);   // well away from the marker: back to a normal reading tooltip
   assert.match(ui.$('tooltip').textContent, /Target 38\.0/);
   assert.doesNotMatch(ui.$('tooltip').textContent, /Setting changed/);
+});
+
+/* ---------- target line ---------- */
+
+const dashedLines = (ui, pattern) => {
+  ui.draws.length = 0;
+  ui.win.dispatchEvent(new ui.win.Event('resize'));
+  return ui.draws.filter((d) => d[0] === 'setLineDash' && d[1].join() === pattern).length;
+};
+
+test('chart draws a dashed target line when there is data', async (t) => {
+  const ui = await boot(t);
+  assert.ok(dashedLines(ui, '6,4') >= 1);
+});
+
+test('no data means no target line', async (t) => {
+  const ui = await boot(t, { history: historyBody([], { min: null, max: null, avg: null, duty_percent: null, samples: 0 }) });
+  assert.equal(dashedLines(ui, '6,4'), 0);
+});
+
+/* ---------- chart scales with its size ---------- */
+
+test('chart text grows on a wide canvas and stays small on a phone', async (t) => {
+  const phone = await boot(t, { canvasWidth: 340 });
+  phone.win.dispatchEvent(new phone.win.Event('resize'));
+  assert.equal(phone.ctx.font, '11px system-ui, sans-serif');
+
+  const wall = await boot(t, { canvasWidth: 1500 });
+  wall.win.dispatchEvent(new wall.win.Event('resize'));
+  assert.equal(wall.ctx.font, '20px system-ui, sans-serif');
+
+  const desktop = await boot(t, { canvasWidth: 600 });
+  desktop.win.dispatchEvent(new desktop.win.Event('resize'));
+  assert.equal(desktop.ctx.font, '11px system-ui, sans-serif');
+});
+
+/* ---------- self-reload when the server has new code ---------- */
+
+test('reloads itself when the server version changes', async (t) => {
+  const ui = await boot(t);
+  assert.equal(ui.reloads.count, 0);
+
+  ui.win.document.dispatchEvent(new ui.win.Event('visibilitychange'));   // same version
+  await ui.settle();
+  assert.equal(ui.reloads.count, 0);
+
+  ui.state.status.version = 'v2';                                          // the Pi was updated
+  ui.win.document.dispatchEvent(new ui.win.Event('visibilitychange'));
+  await ui.settle();
+  assert.equal(ui.reloads.count, 1);
+});
+
+test('does not reload while you are editing the settings', async (t) => {
+  const ui = await boot(t);
+  ui.click('[data-for="target"][data-step="0.5"]');                       // unsaved edit
+  ui.state.status.version = 'v2';
+  ui.win.document.dispatchEvent(new ui.win.Event('visibilitychange'));
+  await ui.settle();
+  assert.equal(ui.reloads.count, 0);
+  assert.equal(ui.$('target').value, '38.5');                              // edit intact
+});
+
+test('a server that reports no version never triggers a reload', async (t) => {
+  const ui = await boot(t, { status: statusBody({ version: undefined }) });
+  ui.win.document.dispatchEvent(new ui.win.Event('visibilitychange'));
+  await ui.settle();
+  assert.equal(ui.reloads.count, 0);
+});
+
+/* ---------- wall display mode ---------- */
+
+test('?display=1 switches on the wall display layout', async (t) => {
+  const wall = await boot(t, { url: 'http://localhost/?display=1' });
+  assert.ok(wall.win.document.documentElement.classList.contains('display'));
+  const normal = await boot(t);
+  assert.ok(!normal.win.document.documentElement.classList.contains('display'));
+  const other = await boot(t, { url: 'http://localhost/?displays=1&x=display' });
+  assert.ok(!other.win.document.documentElement.classList.contains('display'));
+});
+
+/* ---------- idle reset ---------- */
+
+test('another range snaps back to 24h after sitting idle', async (t) => {
+  const ui = await boot(t, { idleMs: 40 });
+  ui.click('[data-hours="1"]');
+  await ui.settle();
+  assert.ok(ui.$('range').querySelector('[data-hours="1"]').classList.contains('active'));
+
+  await new Promise((r) => setTimeout(r, 150));
+  await ui.settle();
+  assert.ok(ui.$('range').querySelector('[data-hours="24"]').classList.contains('active'));
+  assert.ok(!ui.$('range').querySelector('[data-hours="1"]').classList.contains('active'));
+  assert.equal(ui.calls.filter((c) => c.url === '/api/history?hours=24').length, 2);   // initial load + the reset
+});
+
+test('the default range does not start a reset timer', async (t) => {
+  const ui = await boot(t, { idleMs: 20 });
+  ui.click('[data-hours="24"]');
+  await new Promise((r) => setTimeout(r, 100));
+  await ui.settle();
+  assert.equal(ui.calls.filter((c) => c.url === '/api/history?hours=24').length, 2);   // initial + the click, nothing more
 });
