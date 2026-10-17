@@ -102,3 +102,9 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+# Node (frontend tests)
+node_modules/
+
+# Live SQLite database (lives only on the Pi)
+app/app.db*

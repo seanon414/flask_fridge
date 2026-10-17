@@ -86,3 +86,50 @@ dtoverlay=w1-gpio
 ```
 sudo reboot
 ```
+
+## Controller
+
+The thermostat logic lives in one long-running process that replaces the old
+cron + `lager.py` setup. The web app only edits settings in the database; the
+controller is the only thing that talks to the RF transmitter.
+
+```
+export FLASK_APP=app
+flask db upgrade                    # adds hysteresis/mode columns and the reading log
+python -m app.scripts.controller    # run as a systemd service on the Pi
+```
+
+- Turns on above `target + hysteresis`, off below `target - hysteresis`.
+- Won't switch state again within `min_cycle_seconds` (default 300) of the last change.
+- If the sensor can't be read it holds the current state and logs a warning.
+- Mode `auto` follows the thermostat; `on`/`off` force the fridge (set from the web UI).
+- Every cycle (30s) is logged to the `reading` table; rows older than 90 days are pruned.
+- Overridable via env: `CODESEND_PATH`, `FRIDGE_CODE_ON`, `FRIDGE_CODE_OFF`, `SECRET_KEY`, `DATABASE_URL`.
+
+Tests (API tests need an in-memory DB so they never touch app.db):
+
+```
+DATABASE_URL=sqlite:// python -m unittest discover -s app/tests -t .
+```
+
+## Services (Raspberry Pi)
+
+Unit files live in `deploy/`:
+
+```
+sudo cp deploy/keezer.service deploy/keezer-web.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now keezer keezer-web
+```
+
+`keezer` is the control loop; `keezer-web` serves the UI on port 5000 with waitress.
+Put `SECRET_KEY=<random string>` in `.env` (gitignored) so sessions survive restarts.
+
+### Frontend tests (dev machine only)
+
+The browser script is tested under Node with jsdom; the Pi never needs this.
+
+```
+npm install
+npm test
+```

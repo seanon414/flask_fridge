@@ -1,43 +1,111 @@
-{% extends 'base.html' %}
-{% import 'bootstrap/wtf.html' as wtf %}
-
-{% block title %}
-    Lager Fridge
-{% endblock %}
-
-{% block content %}
-    <header>
-        <div class="page-title">
-            <h2 class="title-1">Sean's Lager Fridge</h2>
-        </div>
-    </header>
-    <div class="container">
-        {% block app_content %}
-            <div class="container page-page item">
-                <br>
-                <form  method="post" role="form">
-                    {{ form.csrf_token }}
-                    <div class="flex-container">
-                        <div>{{ wtf.form_field(form.target_temp) }}</div>
-                        <div>{{ wtf.form_field(form.current_temp) }}</div>
-                    </div>
-                    <div class="flex-container">
-		        <div><input type="submit" name="update_target" value="Update Target"></div>
-                        <div><input type="submit" name="refresh_current_temp" value="Refresh Current Temp"></div>
-                        <div><input type="submit" name="turn_off_fridge" value="Fridge Off"></div>
-                        <div><input type="submit" name="turn_on_fridge" value="Fridge On"></div>
-                    </div>
-                </form>
-            </div>
-        {% endblock app_content %}
-        {% with messages = get_flashed_messages() %}
-            <div class="message">
-                {% if messages %}
-                    {% for message in messages %}
-                    <div class="alert alert-info message-text" role="alert">{{ message }}</div>
-                    {% endfor %}
-                {% endif %}
-            </div>
-        {% endwith %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0b1118">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <title>Keezer</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E%E2%9D%84%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <h1>Sean's Lager Keezer</h1>
+    <div class="pills" aria-label="System health">
+      <span class="pill" id="pill-controller" data-state="unknown"><i></i>Controller</span>
+      <span class="pill" id="pill-sensor" data-state="unknown"><i></i>Sensor</span>
     </div>
-{% endblock content %}
+  </header>
+
+  <main class="layout">
+    <div id="banner" class="banner" role="status" hidden></div>
+
+    <section class="card hero" aria-live="polite">
+      <div class="hero-main">
+        <div class="label">Current temperature</div>
+        <div class="temp"><span id="temp">--</span><span class="unit">&deg;F</span></div>
+        <div class="delta" id="delta">Waiting for data&hellip;</div>
+      </div>
+      <div class="hero-side">
+        <div class="state" id="fridge-state" data-state="unknown">
+          <span class="dot"></span><span id="fridge-state-text">Unknown</span>
+        </div>
+        <dl class="facts">
+          <div><dt>Target</dt><dd><span id="fact-target">--</span>&deg;F</dd></div>
+          <div><dt>Range</dt><dd id="fact-range">--</dd></div>
+          <div><dt>Mode</dt><dd id="fact-mode">--</dd></div>
+          <div><dt>Updated</dt><dd id="fact-updated">--</dd></div>
+        </dl>
+      </div>
+    </section>
+
+    <section class="card chart-card">
+      <div class="card-head">
+        <h2>History</h2>
+        <div class="seg" id="range" role="tablist" aria-label="History range">
+          <button type="button" data-hours="1" role="tab">1h</button>
+          <button type="button" data-hours="6" role="tab">6h</button>
+          <button type="button" data-hours="24" role="tab" class="active" aria-selected="true">24h</button>
+          <button type="button" data-hours="168" role="tab">7d</button>
+        </div>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="chart" role="img" aria-label="Temperature history chart"></canvas>
+        <div class="tooltip" id="tooltip" hidden></div>
+        <div class="empty" id="chart-empty" hidden>No readings in this range yet.</div>
+      </div>
+      <div class="legend">
+        <span><i class="sw line"></i>Temperature</span>
+        <span><i class="sw band"></i>Target band</span>
+        <span><i class="sw on"></i>Fridge running</span>
+      </div>
+      <dl class="stats">
+        <div><dt>Low</dt><dd id="stat-min">--</dd></div>
+        <div><dt>Average</dt><dd id="stat-avg">--</dd></div>
+        <div><dt>High</dt><dd id="stat-max">--</dd></div>
+        <div><dt>Run time</dt><dd id="stat-duty">--</dd></div>
+      </dl>
+    </section>
+
+    <section class="card controls">
+      <h2>Controls</h2>
+
+      <div class="control-group">
+        <div class="label">Mode</div>
+        <div class="seg wide" id="mode" role="radiogroup" aria-label="Control mode">
+          <button type="button" data-mode="auto" role="radio">Auto</button>
+          <button type="button" data-mode="on" role="radio">Force on</button>
+          <button type="button" data-mode="off" role="radio">Force off</button>
+        </div>
+        <p class="hint" id="mode-hint">Auto holds the target temperature.</p>
+      </div>
+
+      <div class="control-group two">
+        <div>
+          <label class="label" for="target">Target (&deg;F)</label>
+          <div class="stepper">
+            <button type="button" data-step="-1" data-for="target" aria-label="Decrease target">&minus;</button>
+            <input id="target" type="number" inputmode="numeric" min="20" max="70" step="1">
+            <button type="button" data-step="1" data-for="target" aria-label="Increase target">+</button>
+          </div>
+        </div>
+        <div>
+          <label class="label" for="hysteresis">Swing &plusmn;(&deg;F)</label>
+          <div class="stepper">
+            <button type="button" data-step="-0.5" data-for="hysteresis" aria-label="Decrease swing">&minus;</button>
+            <input id="hysteresis" type="number" inputmode="decimal" min="0.5" max="10" step="0.5">
+            <button type="button" data-step="0.5" data-for="hysteresis" aria-label="Increase swing">+</button>
+          </div>
+        </div>
+      </div>
+      <p class="hint" id="band-hint"></p>
+      <button type="button" class="primary" id="apply" disabled>Apply settings</button>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
