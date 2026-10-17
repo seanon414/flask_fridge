@@ -39,6 +39,7 @@ class Controller(object):
         self.last_change = None
         self.last_sent = None
         self.last_prune = None
+        self.mode = None                # last mode seen, to log changes
 
     def _restore_state(self):
         """After a restart, recover the last known state from the log."""
@@ -66,6 +67,12 @@ class Controller(object):
             _, temp_f = self._sensor()
             if temp_f is None:
                 logger.warning('No valid temperature reading; holding state')
+
+            if settings.mode != self.mode:
+                logger.info('Mode %s -> %s (target=%s hysteresis=%s)',
+                            self.mode, settings.mode, settings.target_temp,
+                            settings.hysteresis)
+                self.mode = settings.mode
 
             if settings.mode == 'on':
                 desired = True
