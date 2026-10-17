@@ -107,3 +107,16 @@ python -m app.scripts.controller    # run as a systemd service on the Pi
 - Overridable via env: `CODESEND_PATH`, `FRIDGE_CODE_ON`, `FRIDGE_CODE_OFF`, `SECRET_KEY`, `DATABASE_URL`.
 
 Tests: `python -m unittest discover -s app/tests -t .`
+
+## Services (Raspberry Pi)
+
+Unit files live in `deploy/`:
+
+```
+sudo cp deploy/keezer.service deploy/keezer-web.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now keezer keezer-web
+```
+
+`keezer` is the control loop; `keezer-web` serves the UI on port 5000 with waitress.
+Put `SECRET_KEY=<random string>` in `.env` (gitignored) so sessions survive restarts.

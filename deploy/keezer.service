@@ -1,0 +1,13 @@
+[Unit]
+Description=Keezer controller
+After=network.target
+
+[Service]
+User=pi
+WorkingDirectory=/home/pi/Documents/code/flask_fridge
+ExecStart=/home/pi/Documents/code/flask_fridge/venv/bin/python -m app.scripts.controller
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

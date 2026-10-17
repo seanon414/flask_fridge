@@ -1,0 +1,14 @@
+[Unit]
+Description=Keezer web UI
+After=network.target
+
+[Service]
+User=pi
+WorkingDirectory=/home/pi/Documents/code/flask_fridge
+EnvironmentFile=-/home/pi/Documents/code/flask_fridge/.env
+ExecStart=/home/pi/Documents/code/flask_fridge/venv/bin/waitress-serve --listen=0.0.0.0:5000 app:app
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
