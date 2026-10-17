@@ -162,10 +162,11 @@ as dashed markers on the history chart; hover one to see what changed.
 
 ## Wall display (a monitor on the Pi)
 
-Open `http://localhost:5000/?display=1` for a big, read-only view that fills the
-screen: large temperature, a tall history chart, no controls (change settings from
-your phone or laptop). It reloads itself when the server is updated, returns to the
-24h chart after 5 idle minutes, and hides the mouse cursor when idle.
+Open `http://localhost:5000/?display=1` for a big view that fills the screen: large
+temperature, a tall history chart, and the controls in a panel beside it (for a mouse
+and keyboard on the Pi). Add `&readonly=1` to hide the controls. The page reloads
+itself when the server is updated, returns to the 24h chart after 5 idle minutes, and
+hides the mouse cursor when idle.
 
 To start it automatically in a full-screen kiosk browser on Raspberry Pi OS
 "Bullseye" (check with `cat /etc/os-release`; the desktop uses LXDE and X11):

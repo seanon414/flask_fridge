@@ -553,3 +553,28 @@ test('the default range does not start a reset timer', async (t) => {
   await ui.settle();
   assert.equal(ui.calls.filter((c) => c.url === '/api/history?hours=24').length, 2);   // initial + the click, nothing more
 });
+
+test('the wall display keeps the controls unless readonly is added', async (t) => {
+  const wall = await boot(t, { url: 'http://localhost/?display=1' });
+  assert.ok(wall.win.document.documentElement.classList.contains('display'));
+  assert.ok(!wall.win.document.documentElement.classList.contains('readonly'));
+
+  const locked = await boot(t, { url: 'http://localhost/?display=1&readonly=1' });
+  assert.ok(locked.win.document.documentElement.classList.contains('display'));
+  assert.ok(locked.win.document.documentElement.classList.contains('readonly'));
+
+  const stray = await boot(t, { url: 'http://localhost/?readonly=1' });      // readonly alone does nothing
+  assert.ok(!stray.win.document.documentElement.classList.contains('readonly'));
+});
+
+test('the controls work in the wall display (mouse and keyboard)', async (t) => {
+  const ui = await boot(t, { url: 'http://localhost/?display=1' });
+  ui.click('[data-for="target"][data-step="0.5"]');
+  ui.click('#apply');
+  await ui.settle();
+  assert.deepEqual(ui.posts()[0].body, { target_temp: 38.5, hysteresis: 1 });
+
+  ui.click('[data-mode="off"]');
+  await ui.settle();
+  assert.deepEqual(ui.posts()[1].body, { mode: 'off' });
+});

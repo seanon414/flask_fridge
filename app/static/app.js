@@ -9,7 +9,12 @@
   // Wall display (/?display=1): bigger, read-only, hides the mouse cursor when idle.
   var root = document.documentElement;
   var DISPLAY = /[?&]display(=1|=true|=on)?(&|$)/.test(window.location.search);
-  if (DISPLAY) { root.classList.add('display'); hideCursorWhenIdle(); }
+  var READONLY = /[?&]readonly(=1|=true|=on)?(&|$)/.test(window.location.search);   // hides the controls
+  if (DISPLAY) {
+    root.classList.add('display');
+    if (READONLY) { root.classList.add('readonly'); }
+    hideCursorWhenIdle();
+  }
 
   function hideCursorWhenIdle() {
     var timer = null;
