@@ -170,6 +170,16 @@
   function refreshHistory() {
     return api('/api/history?hours=' + state.hours).then(function (data) {
       state.history = data;
+      var note = $('range-note');
+      var first = data.points.length ? Date.parse(data.points[0].t) : null;
+      var spanH = first === null ? 0 : (Date.now() - first) / 3600000;
+      if (first !== null && spanH < data.hours * 0.9) {
+        var spanText = spanH < 1 ? Math.round(spanH * 60) + ' min' : fmt(spanH, 1) + ' h';
+        note.textContent = 'Only ' + spanText + ' recorded so far, so this range shows everything.';
+        note.hidden = false;
+      } else {
+        note.hidden = true;
+      }
       var st = data.stats || {};
       $('stat-min').textContent = st.min === null || st.min === undefined ? '--' : fmt(st.min) + '°';
       $('stat-avg').textContent = st.avg === null || st.avg === undefined ? '--' : fmt(st.avg) + '°';

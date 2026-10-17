@@ -45,11 +45,13 @@
       <div class="card-head">
         <h2>History</h2>
         <div class="seg" id="range" role="tablist" aria-label="History range">
+          <button type="button" data-hours="1" role="tab">1h</button>
           <button type="button" data-hours="6" role="tab">6h</button>
           <button type="button" data-hours="24" role="tab" class="active" aria-selected="true">24h</button>
           <button type="button" data-hours="168" role="tab">7d</button>
         </div>
       </div>
+      <p class="hint range-note" id="range-note" hidden></p>
       <div class="chart-wrap">
         <canvas id="chart" role="img" aria-label="Temperature history chart"></canvas>
         <div class="tooltip" id="tooltip" hidden></div>
