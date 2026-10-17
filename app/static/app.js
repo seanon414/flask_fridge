@@ -223,15 +223,20 @@
     var hyst = state.settings ? state.settings.hysteresis : 1;
     var hours = state.history.hours || state.hours;
     var tMax = Date.now();
-    var tMin = tMax - hours * 3600 * 1000;
+    var windowStart = tMax - hours * 3600 * 1000;
+    // With less than a full window of data, zoom to what we have.
+    var tMin = Math.max(windowStart, pts[0].t - (tMax - pts[0].t) * 0.02);
 
+    // Scale to temperatures and the *current* band, so an old target
+    // setting doesn't stretch the axis. Older bands are clipped.
+    var curTarget = state.settings ? state.settings.target_temp : pts[pts.length - 1].target;
     var lo = Infinity, hi = -Infinity;
     pts.forEach(function (p) {
       if (p.temp !== null) { lo = Math.min(lo, p.temp); hi = Math.max(hi, p.temp); }
-      if (p.target !== null && p.target !== undefined) {
-        lo = Math.min(lo, p.target - hyst); hi = Math.max(hi, p.target + hyst);
-      }
     });
+    if (curTarget !== null && curTarget !== undefined) {
+      lo = Math.min(lo, curTarget - hyst); hi = Math.max(hi, curTarget + hyst);
+    }
     if (!isFinite(lo)) { lo = 30; hi = 50; }
     var pad = Math.max(1, (hi - lo) * 0.12);
     lo -= pad; hi += pad;
