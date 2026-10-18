@@ -3,7 +3,7 @@
   "private": true,
   "description": "Dev-only tooling: runs the browser UI tests under Node. The Pi never needs this.",
   "scripts": {
-    "test": "node --test frontend_tests/ui.test.js"
+    "test": "node --test frontend_tests/ui.test.js frontend_tests/cycle-chart.test.js"
   },
   "devDependencies": {
     "jsdom": "^26.0.0"
