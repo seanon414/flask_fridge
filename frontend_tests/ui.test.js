@@ -213,6 +213,25 @@ test('steppers edit the form, update the hint and enable Apply', async (t) => {
     'Starts cooling above 40.0' + DEG + 'F, stops below 37.0' + DEG + 'F.');
 });
 
+test('the hint explains coast-aware control when it is on, and saving does not touch it', async (t) => {
+  const ui = await boot(t, { status: statusBody({ settings: settings({ coast_minutes: 18 }) }) });
+  ui.click('[data-for="target"][data-step="0.5"]');
+  assert.equal(ui.$('band-hint').textContent,
+    'Starts cooling above 39.5' + DEG + 'F and stops early so it coasts down to about 37.5' + DEG +
+    'F (coast-aware, 18 min).');
+
+  ui.click('#apply');
+  await ui.settle();
+  assert.deepEqual(ui.posts()[0].body, { target_temp: 38.5, hysteresis: 1 });   // no coast_minutes sent
+});
+
+test('a coast of 0 keeps the plain hint', async (t) => {
+  const ui = await boot(t, { status: statusBody({ settings: settings({ coast_minutes: 0 }) }) });
+  ui.click('[data-for="target"][data-step="0.5"]');
+  assert.equal(ui.$('band-hint').textContent,
+    'Starts cooling above 39.5' + DEG + 'F, stops below 37.5' + DEG + 'F.');
+});
+
 test('steppers stop at the allowed limits', async (t) => {
   const ui = await boot(t);
   ui.$('target').value = '70';

@@ -556,6 +556,14 @@
       hint.textContent = 'Target must be 20–70°F in half-degree steps, and swing 0.5–10°F.';
       return;
     }
+    var coast = state.settings && state.settings.coast_minutes > 0 ? state.settings.coast_minutes : 0;
+    if (coast) {
+      // the controller stops early so the temperature coasts down to about the low edge
+      hint.textContent = 'Starts cooling above ' + fmt(v.target_temp + v.hysteresis) +
+                         '°F and stops early so it coasts down to about ' + fmt(v.target_temp - v.hysteresis) +
+                         '°F (coast-aware, ' + fmt(coast, 0) + ' min).';
+      return;
+    }
     hint.textContent = 'Starts cooling above ' + fmt(v.target_temp + v.hysteresis) +
                        '°F, stops below ' + fmt(v.target_temp - v.hysteresis) + '°F.';
   }

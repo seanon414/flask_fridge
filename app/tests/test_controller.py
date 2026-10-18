@@ -165,6 +165,87 @@ class ControllerTests(unittest.TestCase):
         self.assertIsNone(self.controller.fridge_on)
         self.assertIsNone(self.last_reading().fridge_on)
 
+    # --- coast-aware control (target 38, swing 1: a plain thermostat stops at 37.0) ---
+
+    def cool_down(self, coast, rate_per_min=0.09):
+        """Turn on at 41F and cool at a steady rate until it stops. Returns (temp, minutes)."""
+        self.settings.coast_minutes = coast
+        db.session.commit()
+        self.step(temp=41.0)                                   # on
+        start = self.now
+        for _ in range(200):
+            self.step(advance=30, temp=41.0 - rate_per_min * (self.now + 30 - start) / 60.0)
+            if self.switch.calls[-1] is False:
+                return self.temp, (self.now - start) / 60.0
+        self.fail('it never stopped')
+
+    def test_coast_off_is_a_plain_thermostat(self):
+        temp, _ = self.cool_down(coast=0)
+        self.assertLessEqual(temp, 37.0)
+        self.assertGreater(temp, 36.9)
+
+    def test_coast_stops_early_while_still_cooling(self):
+        temp, minutes = self.cool_down(coast=18)               # 0.09F/min * 18 min = 1.62F early
+        self.assertGreater(temp, 38.0)                         # well above the plain 37.0 off point
+        self.assertLessEqual(temp, 37.0 + 1.62 + 0.05)
+        # the same fall takes 44.5 minutes to reach 37.0 with coast off (see the test above)
+        self.assertAlmostEqual(minutes, 26.5, delta=1.0)
+
+    def test_coast_still_respects_the_minimum_cycle(self):
+        # a very fast fall (1.5F/min) wants to stop at 38.75, but the compressor must run 5 minutes
+        self.settings.coast_minutes = 30
+        db.session.commit()
+        self.step(temp=41.0)
+        for i in range(1, 9):                                  # 4 minutes
+            self.step(advance=30, temp=41.0 - 0.75 * i)
+        self.assertEqual(self.switch.calls, [True])
+        self.step(advance=60, temp=37.9)                       # 5 minutes since it started
+        self.assertEqual(self.switch.calls, [True, False])
+
+    def test_no_early_stop_right_after_a_restart(self):
+        from app.models.temp import Reading
+        db.session.add(Reading(timestamp=datetime.utcnow() - timedelta(minutes=10),
+                               temp_f=39.5, target_f=38, fridge_on=True))
+        self.settings.coast_minutes = 18
+        db.session.commit()
+        self.controller = self.make_controller()
+        # 38.4 is inside the band, but a rate of 0.09F/min would stop it (38.4 <= 38.62).
+        # With one sample there is no rate yet, so it must not assume one.
+        self.step(temp=38.4)
+        self.assertIs(self.controller.fridge_on, True)
+        self.assertEqual(self.switch.calls, [True])
+
+    def test_a_rising_temperature_never_stops_early(self):
+        self.settings.coast_minutes = 18
+        db.session.commit()
+        self.step(temp=38.4)                                   # on (at or above the 38.0 target)
+        for i in range(1, 12):
+            self.step(advance=30, temp=38.4 + 0.02 * i)
+        self.assertEqual(self.switch.calls, [True])
+
+    def test_coast_with_sensor_failures_holds_state_and_does_not_crash(self):
+        self.settings.coast_minutes = 18
+        db.session.commit()
+        self.step(temp=41.0)
+        self.temp = None
+        for _ in range(5):
+            self.step(advance=60)
+        self.assertEqual(self.switch.calls, [True])
+        self.assertIs(self.controller.fridge_on, True)
+
+    def test_logs_how_far_each_stop_coasted(self):
+        self.settings.coast_minutes = 18
+        db.session.commit()
+        self.cool_down(coast=18)
+        stop_temp = self.temp
+        with self.assertLogs('app.scripts.controller', level='INFO') as logs:
+            self.step(advance=300, temp=stop_temp - 0.5)       # keeps falling after the stop
+            self.step(advance=300, temp=stop_temp - 0.2)
+            self.step(advance=300, temp=39.5)                  # warm again: starts cooling
+        coast_lines = [m for m in logs.output if 'Coast: stopped at' in m]
+        self.assertEqual(len(coast_lines), 1)
+        self.assertIn('(0.50F lower)', coast_lines[0])
+
     # --- RF reliability ---
 
     def test_failed_send_is_retried_and_state_not_committed(self):

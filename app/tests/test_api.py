@@ -114,6 +114,48 @@ class ApiTests(unittest.TestCase):
             r = self.client.post('/api/settings', json=body)
             self.assertEqual(r.status_code, 400, body)
 
+    # --- coast minutes ---
+
+    def settings(self):
+        return self.client.get('/api/status').get_json()['settings']
+
+    def test_coast_is_off_by_default(self):
+        self.assertEqual(self.settings()['coast_minutes'], 0)
+
+    def test_coast_can_be_set_with_the_other_settings(self):
+        r = self.client.post('/api/settings',
+                             json={'target_temp': 39, 'hysteresis': 0.5, 'coast_minutes': 18})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.get_json()['coast_minutes'], 18)
+        self.assertEqual(self.settings()['coast_minutes'], 18)
+
+    def test_leaving_coast_out_keeps_it(self):
+        self.client.post('/api/settings', json={'target_temp': 39, 'hysteresis': 0.5, 'coast_minutes': 18})
+        self.client.post('/api/settings', json={'target_temp': 40, 'hysteresis': 0.5})
+        self.assertEqual(self.settings()['coast_minutes'], 18)
+        self.client.post('/api/settings', json={'target_temp': 40, 'hysteresis': 0.5, 'coast_minutes': None})
+        self.assertEqual(self.settings()['coast_minutes'], 18)
+
+    def test_coast_zero_turns_it_off(self):
+        self.client.post('/api/settings', json={'target_temp': 39, 'hysteresis': 0.5, 'coast_minutes': 18})
+        self.client.post('/api/settings', json={'target_temp': 39, 'hysteresis': 0.5, 'coast_minutes': 0})
+        self.assertEqual(self.settings()['coast_minutes'], 0)
+
+    def test_bad_coast_values_are_rejected_and_change_nothing(self):
+        for bad in (-1, 61, 'soon', [5]):
+            r = self.client.post('/api/settings',
+                                 json={'target_temp': 40, 'hysteresis': 1.0, 'coast_minutes': bad})
+            self.assertEqual(r.status_code, 400, bad)
+        self.assertEqual(self.settings()['target_temp'], 45.0)      # nothing was applied
+        self.assertEqual(self.settings()['coast_minutes'], 0)
+
+    def test_changing_coast_logs_an_event(self):
+        self.client.post('/api/settings', json={'target_temp': 45, 'hysteresis': 1.0, 'coast_minutes': 18})
+        [event] = self.events()
+        self.assertEqual(event['kind'], 'settings')
+        self.assertIn('Coast 0.0 → 18.0 min', event['detail'])
+        self.assertNotIn('Target', event['detail'])
+
     # --- mode ---
 
     def test_update_mode(self):

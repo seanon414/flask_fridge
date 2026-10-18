@@ -18,7 +18,7 @@ from datetime import datetime, timedelta
 from app import app, db
 from app.models.temp import Event, Reading, get_settings
 from app.scripts import alerts
-from app.scripts.control_logic import decide
+from app.scripts.control_logic import cooling_rate, decide
 from app.scripts.fridge_control import set_fridge
 from app.scripts.thermometer import read_temp
 
@@ -28,6 +28,7 @@ POLL_SECONDS = 30
 RESEND_SECONDS = 600       # re-send the current state in case an RF packet was missed
 RETENTION_DAYS = 90
 PRUNE_EVERY_SECONDS = 3600
+RATE_WINDOW_SECONDS = 360  # how far back the cooling rate looks; older samples are dropped
 
 
 class Controller(object):
@@ -42,6 +43,9 @@ class Controller(object):
         self.last_sent = None
         self.last_prune = None
         self.mode = None                # last mode seen, to log changes
+        self._recent = []               # (clock seconds, temp_f), newest last, for the cooling rate
+        self._off_temp = None           # temperature when the fridge last turned off ...
+        self._off_low = None            # ... and the lowest it has been since
 
     def _restore_state(self):
         """After a restart, recover the last known state from the log."""
@@ -58,6 +62,21 @@ class Controller(object):
         Event.query.filter(Event.timestamp < cutoff).delete()
         db.session.commit()
         self.last_prune = now
+
+    def _track_coast(self, now_on, temp_f):
+        """Log how far the temperature kept falling after each stop.
+
+        `python -m app.scripts.coast` reads the history to suggest a coast
+        setting; this line is the same measurement, live, in the journal.
+        """
+        if temp_f is None:
+            self._off_temp = self._off_low = None
+        elif not now_on:
+            self._off_temp = self._off_low = temp_f
+        elif self._off_temp is not None:
+            logger.info('Coast: stopped at %.2fF, bottomed at %.2fF (%.2fF lower) before cooling again',
+                        self._off_temp, self._off_low, self._off_temp - self._off_low)
+            self._off_temp = self._off_low = None
 
     def _check_alerts(self, settings):
         """Alerts must never be able to break temperature control."""
@@ -78,6 +97,12 @@ class Controller(object):
             _, temp_f = self._sensor()
             if temp_f is None:
                 logger.warning('No valid temperature reading; holding state')
+            else:
+                self._recent.append((now, temp_f))
+            self._recent = [s for s in self._recent if s[0] >= now - RATE_WINDOW_SECONDS]
+            rate = cooling_rate(self._recent, window_seconds=RATE_WINDOW_SECONDS)
+            if temp_f is not None and self.fridge_on is False and self._off_low is not None:
+                self._off_low = min(self._off_low, temp_f)
 
             if settings.mode != self.mode:
                 logger.info('Mode %s -> %s (target=%s hysteresis=%s)',
@@ -92,7 +117,9 @@ class Controller(object):
             else:
                 since = None if self.last_change is None else now - self.last_change
                 desired = decide(temp_f, settings.target_temp, settings.hysteresis,
-                                 self.fridge_on, since, settings.min_cycle_seconds)
+                                 self.fridge_on, since, settings.min_cycle_seconds,
+                                 coast_minutes=settings.coast_minutes or 0.0,
+                                 cooling_rate_f_per_min=rate)
 
             if desired is not None:
                 changed = desired != self.fridge_on
@@ -103,9 +130,12 @@ class Controller(object):
                         if changed:
                             self.last_change = now
                             self.fridge_on = desired
-                            logger.info('Fridge -> %s (temp=%s target=%s mode=%s)',
+                            logger.info('Fridge -> %s (temp=%s target=%s mode=%s cooling=%s F/min coast=%s min)',
                                         'ON' if desired else 'OFF', temp_f,
-                                        settings.target_temp, settings.mode)
+                                        settings.target_temp, settings.mode,
+                                        None if rate is None else round(rate, 3),
+                                        settings.coast_minutes or 0)
+                            self._track_coast(desired, temp_f)
                     else:
                         logger.error('Failed to send fridge command; will retry next cycle')
 
