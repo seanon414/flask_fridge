@@ -80,7 +80,7 @@ async function boot(t, opts) {
   const draws = [];
   const reloads = { count: 0 };
 
-  const dom = new JSDOM(HTML, { runScripts: 'outside-only', pretendToBeVisual: true, url: opts.url || 'http://localhost/' });
+  const dom = new JSDOM(opts.html ? opts.html(HTML) : HTML, { runScripts: 'outside-only', pretendToBeVisual: true, url: opts.url || 'http://localhost/' });
   const win = dom.window;
   t.after(() => win.close());
 
@@ -121,14 +121,21 @@ async function boot(t, opts) {
 
   win.keezerReload = () => { reloads.count += 1; };
   if (opts.idleMs) { win.keezerIdleMs = opts.idleMs; }
+  if (opts.bootMs) { win.keezerBootMs = opts.bootMs; }
 
-  win.eval(APP_JS);
+  let scriptError = null;
+  try {
+    win.eval(APP_JS);
+  } catch (err) {
+    if (!opts.scriptMayThrow) { throw err; }
+    scriptError = err;      // a real browser logs this and carries on; so do we
+  }
   await settle();
 
   const $ = (id) => win.document.getElementById(id);
   const click = (selector) => { win.document.querySelector(selector).click(); };
   const posts = () => calls.filter((c) => c.method === 'POST');
-  return { win, $, click, calls, posts, draws, state, settle, reloads, ctx };
+  return { win, $, click, calls, posts, draws, state, settle, reloads, ctx, scriptError };
 }
 
 /* ---------- status rendering ---------- */
@@ -607,6 +614,41 @@ test('a server that reports no version never triggers a reload', async (t) => {
   ui.win.document.dispatchEvent(new ui.win.Event('visibilitychange'));
   await ui.settle();
   assert.equal(ui.reloads.count, 0);
+});
+
+/* ---------- self-heal when the page never comes up ---------- */
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+test('a healthy page is never reloaded by the watchdog', async (t) => {
+  const ui = await boot(t, { bootMs: 40 });
+  await sleep(160);
+  assert.equal(ui.reloads.count, 0);
+});
+
+test('reloads when the script breaks on load but the server is up (new script, old page)', async (t) => {
+  // exactly the deploy mix-up: the page has no coast box, so the script throws part way through
+  const ui = await boot(t, {
+    bootMs: 40, scriptMayThrow: true,
+    html: (html) => html.replace(/<div>\s*<label class="label" for="coast">[\s\S]*?<\/details>\s*<\/div>/, '')
+                        .replace(/<input id="coast"[^>]*>/, '')
+  });
+  assert.ok(ui.scriptError, 'the script was expected to throw on the old page');
+  assert.equal(ui.$('coast'), null);
+  await sleep(160);
+  assert.equal(ui.reloads.count, 1);
+  assert.ok(ui.calls.some((c) => c.url.startsWith('/api/status')));      // it checked the server first
+});
+
+test('does not reload while the server is down, and recovers once it is back', async (t) => {
+  const ui = await boot(t, { bootMs: 40, networkDown: true });
+  await sleep(200);
+  assert.equal(ui.reloads.count, 0);                                      // keeps its banner instead
+  assert.match(ui.$('banner').textContent, /reach the web service/);
+
+  ui.state.networkDown = false;
+  await sleep(200);
+  assert.equal(ui.reloads.count, 1);
 });
 
 /* ---------- wall display mode ---------- */

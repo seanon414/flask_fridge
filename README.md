@@ -196,7 +196,10 @@ Open `http://127.0.0.1:5000/?display=1` for a big view that fills the screen: la
 temperature, a tall history chart, and the controls in a panel beside it (for a mouse
 and keyboard on the Pi). Add `&readonly=1` to hide the controls. The page reloads
 itself when the server is updated, returns to the 24h chart after 5 idle minutes, and
-hides the mouse cursor when idle.
+hides the mouse cursor when idle. If a page has not shown live data a minute after loading
+(for example a new script met an old cached page in the middle of an update) it reloads
+itself, but only while the server is reachable; if the server is down it keeps its
+"Can’t reach the web service" banner and recovers by itself.
 
 To start it automatically in a full-screen kiosk browser on Raspberry Pi OS
 "Bullseye" (check with `cat /etc/os-release`; the desktop uses LXDE and X11):

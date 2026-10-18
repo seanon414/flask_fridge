@@ -6,6 +6,25 @@
   var DEFAULT_HOURS = 24;
   var $ = function (id) { return document.getElementById(id); };
 
+  // Self-heal for an unattended screen. If the page has not shown live data a
+  // minute after loading (its script broke on load, e.g. a new script meeting an
+  // old cached page in the middle of a deploy), reload it: nobody is there to
+  // press F5. It only reloads when the server answers; if the server is down the
+  // page keeps its "Can't reach the web service" banner and retries, which beats
+  // swapping it for the browser's own error page. Armed first, before anything
+  // below can throw.
+  var booted = false;
+  var BOOT_CHECK_MS = window.keezerBootMs || 60 * 1000;   // keezerBootMs: test seam
+  function bootWatchdog() {
+    if (booted) { return; }
+    var again = function () { setTimeout(bootWatchdog, BOOT_CHECK_MS); };
+    fetch('/api/status', { cache: 'no-store' }).then(function (r) {
+      if (booted) { return; }
+      if (r.ok) { reloadPage(); } else { again(); }
+    }).catch(again);
+  }
+  setTimeout(bootWatchdog, BOOT_CHECK_MS);
+
   // Wall display (/?display=1): bigger, read-only, hides the mouse cursor when idle.
   var root = document.documentElement;
   var DISPLAY = /[?&]display(=1|=true|=on)?(&|$)/.test(window.location.search);
@@ -234,6 +253,7 @@
       state.status = data;
       checkVersion(data.version);
       render();
+      booted = true;
     }).catch(function () {
       setPill('pill-controller', false);
       var el = $('banner');
