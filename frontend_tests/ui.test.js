@@ -29,7 +29,7 @@ const HOUR = 3600 * 1000;
 const iso = (ms) => new Date(ms).toISOString();
 
 function settings(o) {
-  return Object.assign({ target_temp: 38, hysteresis: 1, min_cycle_seconds: 300, mode: 'auto' }, o);
+  return Object.assign({ target_temp: 38, hysteresis: 1, min_cycle_seconds: 300, coast_minutes: 0, mode: 'auto' }, o);
 }
 
 function statusBody(o) {
@@ -213,23 +213,93 @@ test('steppers edit the form, update the hint and enable Apply', async (t) => {
     'Starts cooling above 40.0' + DEG + 'F, stops below 37.0' + DEG + 'F.');
 });
 
-test('the hint explains coast-aware control when it is on, and saving does not touch it', async (t) => {
-  const ui = await boot(t, { status: statusBody({ settings: settings({ coast_minutes: 18 }) }) });
-  ui.click('[data-for="target"][data-step="0.5"]');
-  assert.equal(ui.$('band-hint').textContent,
-    'Starts cooling above 39.5' + DEG + 'F and stops early so it coasts down to about 37.5' + DEG +
-    'F (coast-aware, 18 min).');
+/* ---------- coast ---------- */
 
-  ui.click('#apply');
-  await ui.settle();
-  assert.deepEqual(ui.posts()[0].body, { target_temp: 38.5, hysteresis: 1 });   // no coast_minutes sent
+test('the coast control shows the saved value and explains itself', async (t) => {
+  const ui = await boot(t, { status: statusBody({ settings: settings({ coast_minutes: 18 }) }) });
+  assert.equal(ui.$('coast').value, '18');
+  const help = ui.$('coast-help');
+  assert.equal(help.tagName, 'DETAILS');
+  assert.equal(help.open, false);                       // collapsed until asked for
+  assert.match(help.querySelector('summary').textContent, /What does coast do\?/);
+  assert.match(help.textContent, /keeps cooling/);
+  assert.match(help.textContent, /2°F/);
 });
 
-test('a coast of 0 keeps the plain hint', async (t) => {
-  const ui = await boot(t, { status: statusBody({ settings: settings({ coast_minutes: 0 }) }) });
+test('coast off shows 0 and the plain hint', async (t) => {
+  const ui = await boot(t);
+  assert.equal(ui.$('coast').value, '0');
   ui.click('[data-for="target"][data-step="0.5"]');
   assert.equal(ui.$('band-hint').textContent,
     'Starts cooling above 39.5' + DEG + 'F, stops below 37.5' + DEG + 'F.');
+});
+
+test('the coast stepper moves in whole minutes and stops at 0 and 60', async (t) => {
+  const ui = await boot(t, { status: statusBody({ settings: settings({ coast_minutes: 1 }) }) });
+  ui.click('[data-for="coast"][data-step="-1"]');
+  assert.equal(ui.$('coast').value, '0');
+  ui.click('[data-for="coast"][data-step="-1"]');
+  assert.equal(ui.$('coast').value, '0');               // not below zero
+  for (let i = 0; i < 70; i++) { ui.click('[data-for="coast"][data-step="1"]'); }
+  assert.equal(ui.$('coast').value, '60');              // not above sixty
+  assert.equal(ui.$('apply').disabled, false);
+});
+
+test('changing coast previews it in the hint before saving', async (t) => {
+  const ui = await boot(t);
+  ui.click('[data-for="coast"][data-step="1"]');
+  assert.equal(ui.$('coast').value, '1');
+  assert.equal(ui.$('apply').disabled, false);
+  assert.equal(ui.$('band-hint').textContent,
+    'Starts cooling above 39.0' + DEG + 'F and stops early so it coasts down to about 37.0' + DEG +
+    'F (coast 1 min).');
+});
+
+test('saving sends coast_minutes along with target and swing', async (t) => {
+  const ui = await boot(t);
+  for (let i = 0; i < 18; i++) { ui.click('[data-for="coast"][data-step="1"]'); }
+  ui.click('#apply');
+  await ui.settle();
+  assert.deepEqual(ui.posts()[0].body, { target_temp: 38, hysteresis: 1, coast_minutes: 18 });
+  assert.equal(ui.$('coast').value, '18');              // refreshed from the server
+  assert.match(ui.$('band-hint').textContent, /coast 18 min\)/);
+});
+
+test('a coast set from the command line keeps its decimal when other settings are saved', async (t) => {
+  const ui = await boot(t, { status: statusBody({ settings: settings({ coast_minutes: 18.3 }) }) });
+  assert.equal(ui.$('coast').value, '18.3');
+  ui.click('[data-for="target"][data-step="0.5"]');
+  ui.click('#apply');
+  await ui.settle();
+  assert.deepEqual(ui.posts()[0].body, { target_temp: 38.5, hysteresis: 1, coast_minutes: 18.3 });
+});
+
+test('an invalid coast value disables Apply', async (t) => {
+  const ui = await boot(t);
+  for (const bad of ['-1', '61', '', 'abc']) {
+    ui.$('coast').value = bad;
+    ui.$('coast').dispatchEvent(new ui.win.Event('input', { bubbles: true }));
+    assert.equal(ui.$('apply').disabled, true, 'coast "' + bad + '"');
+    assert.match(ui.$('band-hint').textContent, /coast 0–60 minutes/);
+  }
+  ui.$('coast').value = '12';
+  ui.$('coast').dispatchEvent(new ui.win.Event('input', { bubbles: true }));
+  assert.equal(ui.$('apply').disabled, false);
+});
+
+/* ---------- how to leave the kiosk ---------- */
+
+test('the exit-kiosk helper text is in the page and names the key combination', async (t) => {
+  const ui = await boot(t, { url: 'http://localhost/?display=1' });
+  const help = ui.$('kiosk-help');
+  assert.match(help.textContent, /exit kiosk mode/i);
+  assert.deepEqual(Array.from(help.querySelectorAll('kbd')).map((k) => k.textContent), ['Alt', 'F4']);
+});
+
+test('the exit-kiosk helper only shows on the wall display', () => {
+  const css = fs.readFileSync(path.join(APP, 'static', 'app.css'), 'utf8').split('\r\n').join('\n');
+  assert.ok(css.includes('\n.kiosk-help { display: none; }\n'));            // hidden everywhere ...
+  assert.match(css, /\n\.display \.kiosk-help \{\n\s+display: block;/);     // ... except the wall display
 });
 
 test('steppers stop at the allowed limits', async (t) => {
@@ -268,7 +338,7 @@ test('Apply posts the settings with the CSRF token', async (t) => {
 
   const [post] = ui.posts();
   assert.equal(post.url, '/api/settings');
-  assert.deepEqual(post.body, { target_temp: 38.5, hysteresis: 1 });
+  assert.deepEqual(post.body, { target_temp: 38.5, hysteresis: 1, coast_minutes: 0 });
   assert.equal(post.headers['X-CSRFToken'], 'test-token');
   assert.equal(post.headers['Content-Type'], 'application/json');
   assert.equal(ui.$('toast').hidden, false);
@@ -591,7 +661,7 @@ test('the controls work in the wall display (mouse and keyboard)', async (t) => 
   ui.click('[data-for="target"][data-step="0.5"]');
   ui.click('#apply');
   await ui.settle();
-  assert.deepEqual(ui.posts()[0].body, { target_temp: 38.5, hysteresis: 1 });
+  assert.deepEqual(ui.posts()[0].body, { target_temp: 38.5, hysteresis: 1, coast_minutes: 0 });
 
   ui.click('[data-mode="off"]');
   await ui.settle();

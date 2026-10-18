@@ -103,11 +103,30 @@
           </div>
         </div>
       </div>
+      <div class="control-group">
+        <label class="label" for="coast">Coast (minutes, 0 = off)</label>
+        <div class="stepper">
+          <button type="button" data-step="-1" data-for="coast" aria-label="Decrease coast">&minus;</button>
+          <input id="coast" type="number" inputmode="decimal" min="0" max="60" step="1" data-digits="0">
+          <button type="button" data-step="1" data-for="coast" aria-label="Increase coast">+</button>
+        </div>
+        <details class="explain" id="coast-help">
+          <summary>What does coast do?</summary>
+          <p>After the compressor stops, the freezer keeps cooling for a while, so the temperature
+          slides below the low edge of your range. Coast is how many minutes that slide lasts.
+          The controller watches how fast the temperature is falling and stops early, so it settles
+          near the low edge instead of well under it. A bigger number stops earlier; 0 stops
+          exactly at the low edge.</p>
+          <p>Trade-off: shorter runs and more cycles per day. It never stops more than 2&deg;F
+          early and still keeps the 5-minute minimum run.</p>
+        </details>
+      </div>
       <p class="hint" id="band-hint"></p>
       <button type="button" class="primary" id="apply" disabled>Apply settings</button>
     </section>
   </main>
 
+  <p class="kiosk-help" id="kiosk-help">To exit kiosk mode, press <kbd>Alt</kbd>+<kbd>F4</kbd></p>
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
   <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>

@@ -124,6 +124,10 @@ python -m app.scripts.coast set 18      # turn it on; takes effect within 30 s, 
 python -m app.scripts.coast set 0       # back to a plain thermostat
 ```
 
+You can also change it in the web page's Controls panel ("Coast"; tap "What does coast
+do?" for a short explanation). The wall display (`?display=1`) shows a small reminder at
+the bottom of the screen that `Alt`+`F4` exits kiosk mode.
+
 The study measures every complete compressor stop (readings unbroken from a few minutes
 before the stop until the next start), divides how far the temperature kept falling by
 how fast it was falling, and suggests the median. Re-run it after a day or two with

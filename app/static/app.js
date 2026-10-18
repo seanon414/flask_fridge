@@ -65,6 +65,14 @@
     return (n === null || n === undefined || isNaN(n)) ? '--' : Number(n).toFixed(digits === undefined ? 1 : digits);
   }
 
+  // Whole minutes show without a decimal; a value set from the command line
+  // such as 18.3 keeps its decimal so that saving other settings can't round it.
+  function fmtMinutes(n) {
+    n = Number(n);
+    if (isNaN(n) || n <= 0) { return '0'; }
+    return n % 1 === 0 ? n.toFixed(0) : n.toFixed(1);
+  }
+
   function ago(seconds) {
     if (seconds === null || seconds === undefined) { return 'never'; }
     if (seconds < 5) { return 'just now'; }
@@ -137,6 +145,7 @@
     if (!state.dirty) {
       $('target').value = fmt(cfg.target_temp, 1);
       $('hysteresis').value = fmt(cfg.hysteresis, 1);
+      $('coast').value = fmtMinutes(cfg.coast_minutes);
       updateBandHint();
     }
     draw();
@@ -539,29 +548,31 @@
   function readInputs() {
     return {
       target_temp: parseFloat($('target').value),
-      hysteresis: parseFloat($('hysteresis').value)
+      hysteresis: parseFloat($('hysteresis').value),
+      coast_minutes: parseFloat($('coast').value)
     };
   }
 
   function validInputs(v) {
     return !isNaN(v.target_temp) && v.target_temp >= 20 && v.target_temp <= 70 &&
            Math.abs(v.target_temp * 2 - Math.round(v.target_temp * 2)) < 1e-9 &&
-           !isNaN(v.hysteresis) && v.hysteresis >= 0.5 && v.hysteresis <= 10;
+           !isNaN(v.hysteresis) && v.hysteresis >= 0.5 && v.hysteresis <= 10 &&
+           !isNaN(v.coast_minutes) && v.coast_minutes >= 0 && v.coast_minutes <= 60;
   }
 
   function updateBandHint() {
     var v = readInputs();
     var hint = $('band-hint');
     if (!validInputs(v)) {
-      hint.textContent = 'Target must be 20–70°F in half-degree steps, and swing 0.5–10°F.';
+      hint.textContent = 'Target must be 20–70°F in half-degree steps, swing 0.5–10°F and coast 0–60 minutes.';
       return;
     }
-    var coast = state.settings && state.settings.coast_minutes > 0 ? state.settings.coast_minutes : 0;
-    if (coast) {
+    var coast = v.coast_minutes;     // what the form says, so the hint previews what Apply will do
+    if (coast > 0) {
       // the controller stops early so the temperature coasts down to about the low edge
       hint.textContent = 'Starts cooling above ' + fmt(v.target_temp + v.hysteresis) +
                          '°F and stops early so it coasts down to about ' + fmt(v.target_temp - v.hysteresis) +
-                         '°F (coast-aware, ' + fmt(coast, 0) + ' min).';
+                         '°F (coast ' + fmtMinutes(coast) + ' min).';
       return;
     }
     hint.textContent = 'Starts cooling above ' + fmt(v.target_temp + v.hysteresis) +
@@ -581,12 +592,17 @@
       if (isNaN(cur)) { cur = parseFloat(input.min); }
       var next = cur + parseFloat(btn.dataset.step);
       next = Math.min(parseFloat(input.max), Math.max(parseFloat(input.min), next));
-      input.value = (Math.round(next * 2) / 2).toFixed(1);
+      if (input.dataset.digits === '0') {
+        input.value = String(Math.round(next));          // whole minutes
+      } else {
+        input.value = (Math.round(next * 2) / 2).toFixed(1);   // half degrees
+      }
       markDirty();
     });
   });
   $('target').addEventListener('input', markDirty);
   $('hysteresis').addEventListener('input', markDirty);
+  $('coast').addEventListener('input', markDirty);
 
   $('apply').addEventListener('click', function () {
     var v = readInputs();
