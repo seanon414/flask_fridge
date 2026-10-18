@@ -56,6 +56,9 @@ the probe is in a jar of water at the bottom of the freezer):
 
 ![One real cooling cycle: the temperature keeps falling about 1.65 °F after the compressor stops](images/coast-cycle.svg)
 
+(The chart reads averaged points, so its numbers differ a little from the table below, which uses
+every reading.)
+
 Measured over 24 hours (five complete cycles) with coast off:
 
 | | Value |
@@ -136,6 +139,21 @@ Coast: stopped at 38.62F, bottomed at 38.10F (0.52F lower) before cooling again
 
 Re-run the study after a day or two and adjust: because the compressor now stops earlier,
 the slope at the stop changes, and so does the best number.
+
+### Drawing the chart yourself
+
+`docs/tools/cycle-chart.js` draws the picture above from the keezer's own history, so you can
+make a fresh one, for example to compare before and after turning coast-aware control on. It
+needs Node and a complete cycle in the window:
+
+```
+node docs/tools/cycle-chart.js http://<pi>:5000 --hours 12 --out my-cycle.svg      --title "With coast-aware control" --subtitle "Coast 18 min"
+```
+
+It reads the target and swing from the running keezer, annotates the middle complete cycle
+(`--cycle N` picks another), and writes the numbers it measures into the key. A shorter
+`--hours` gives sharper numbers, because the API averages the history into at most 300 points.
+The comment at the top of the script lists every option.
 
 ## Tuning notes
 

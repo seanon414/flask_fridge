@@ -220,7 +220,7 @@ app/
   static/, templates/  the web page
   tests/               Python tests
 deploy/                systemd units and the kiosk launcher
-docs/                  this documentation
+docs/                  this documentation, with a tool that draws the cycle chart
 frontend_tests/        browser-script tests (jsdom, run with npm test)
 migrations/            database migrations
 ```
