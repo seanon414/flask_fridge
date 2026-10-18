@@ -20,6 +20,37 @@ systemctl list-timers | grep keezer              # next watchdog and backup runs
 Healthy looks like: `controller_ok: true`, `sensor_ok: true`, no active alerts, and a
 reading younger than about a minute.
 
+## Branch protection and CI
+
+Every pull request runs the **CI** workflow (`.github/workflows/ci.yml`) on GitHub's servers:
+
+| Check | What it runs |
+|---|---|
+| **Python tests** | Python 3.9 (what the Pi runs), `pip install -r requires.txt`, the whole suite against an in-memory database |
+| **Frontend tests** | Node 22, `npm ci`, `npm test` (the browser script and the chart tool) |
+
+`master` is **protected**: a pull request cannot be merged until both checks pass, and that
+applies to the repository owner too. Force-pushes to `master` and deleting it are blocked. The
+rule is a GitHub setting, not a file in the repository. To see or change it, use the repository's
+Settings, Branches page, or:
+
+```
+gh api repos/seanon414/flask_fridge/branches/master/protection
+```
+
+Things to know:
+
+- A red check means a test failed: open the check's details on the pull request, fix it, push
+  again, and CI re-runs by itself.
+- If you ever need to merge past a broken or unavailable check, remove or relax the rule on
+  that Settings page first, then restore it. Nothing else bypasses it.
+- **Branch protection only works on a public repository** (or with a paid GitHub plan). If you
+  make this repository private on a free plan, the rule stops being enforced and CI becomes
+  advisory: the tests still run and show a tick or a cross, but nothing blocks the merge.
+- The CI actions are pinned to exact commits. Update them on purpose, not by accident.
+- To run the same checks yourself: `DATABASE_URL=sqlite:// python -m unittest discover -s app/tests -t .`
+  and `npm test`.
+
 ## Updating
 
 Unit and data files live outside the code, so an update is a `git pull`, a database
