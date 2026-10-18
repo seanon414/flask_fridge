@@ -13,6 +13,9 @@ class Temp(db.Model):
     hysteresis = db.Column(db.Float, nullable=False, default=1.0, server_default='1.0')
     min_cycle_seconds = db.Column(db.Integer, nullable=False, default=300, server_default='300')
     mode = db.Column(db.String(8), nullable=False, default='auto', server_default='auto')
+    # How long the temperature keeps falling after the compressor stops, in minutes.
+    # 0 = plain thermostat; see control_logic.decide and app.scripts.coast.
+    coast_minutes = db.Column(db.Float, nullable=False, default=0.0, server_default='0')
 
 
 class Reading(db.Model):

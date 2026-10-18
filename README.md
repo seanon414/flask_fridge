@@ -106,6 +106,32 @@ python -m app.scripts.controller    # run as a systemd service on the Pi
 - Every cycle (30s) is logged to the `reading` table; rows older than 90 days are pruned.
 - Overridable via env: `CODESEND_PATH`, `FRIDGE_CODE_ON`, `FRIDGE_CODE_OFF`, `SECRET_KEY`, `DATABASE_URL`.
 
+### Coast-aware control (optional)
+
+A chest freezer keeps cooling for a while after the compressor stops, so a plain
+thermostat overshoots its low edge (on the author's keezer: a 1°F band swung about
+2.8°F, averaging well under the target). With a coast time set, the controller watches
+how fast the temperature is falling and stops early, once
+`temp - cooling rate × coast minutes` reaches the low edge. It never stops more than
+2°F early, never breaks the minimum cycle time, and does nothing until it has about
+three minutes of readings (e.g. just after a restart). Off by default (`0`).
+
+```
+export FLASK_APP=app
+flask db upgrade                        # adds the coast_minutes setting (once)
+python -m app.scripts.coast             # study the last 3 days and suggest a value
+python -m app.scripts.coast set 18      # turn it on; takes effect within 30 s, no restart
+python -m app.scripts.coast set 0       # back to a plain thermostat
+```
+
+The study measures every complete compressor stop (readings unbroken from a few minutes
+before the stop until the next start), divides how far the temperature kept falling by
+how fast it was falling, and suggests the median. Re-run it after a day or two with
+coast on and adjust. The controller also logs each stop's real coast to the journal
+(`journalctl -u keezer | grep Coast:`). Trade-off: stopping earlier means shorter
+compressor runs and more cycles per day. If you would rather have fewer starts, widen
+the swing instead. Changes made with `set` show up as markers on the history chart.
+
 Tests (API tests need an in-memory DB so they never touch app.db):
 
 ```

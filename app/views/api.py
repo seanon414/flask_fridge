@@ -17,6 +17,7 @@ MAX_HISTORY_HOURS = 24 * 30
 
 TARGET_RANGE = (20.0, 70.0)
 HYSTERESIS_RANGE = (0.5, 10.0)
+COAST_RANGE = (0.0, 60.0)    # minutes; 0 turns coast-aware control off
 
 MODE_LABELS = {'auto': 'Auto', 'on': 'Forced on', 'off': 'Forced off'}
 
@@ -51,6 +52,7 @@ def _settings_json(settings):
         'target_temp': settings.target_temp,
         'hysteresis': settings.hysteresis,
         'min_cycle_seconds': settings.min_cycle_seconds,
+        'coast_minutes': settings.coast_minutes,
         'mode': settings.mode,
     }
 
@@ -162,6 +164,16 @@ def update_settings():
         return _bad('hysteresis must be between {:g} and {:g}'.format(*HYSTERESIS_RANGE))
     hysteresis = round(hysteresis, 1)
 
+    coast = None    # optional: leaving it out keeps the current value
+    if data.get('coast_minutes') is not None:
+        try:
+            coast = float(data['coast_minutes'])
+        except (TypeError, ValueError):
+            return _bad('coast_minutes must be a number')
+        if not COAST_RANGE[0] <= coast <= COAST_RANGE[1]:
+            return _bad('coast_minutes must be between {:g} and {:g}'.format(*COAST_RANGE))
+        coast = round(coast, 1)
+
     settings = get_settings()
     changes = []
     if settings.target_temp != target:
@@ -169,9 +181,13 @@ def update_settings():
             _fmt(settings.target_temp) if settings.target_temp is not None else '--', _fmt(target)))
     if settings.hysteresis != hysteresis:
         changes.append('Swing ±{} → ±{}°F'.format(_fmt(settings.hysteresis), _fmt(hysteresis)))
+    if coast is not None and settings.coast_minutes != coast:
+        changes.append('Coast {} → {} min'.format(_fmt(settings.coast_minutes or 0), _fmt(coast)))
 
     settings.target_temp = target
     settings.hysteresis = hysteresis
+    if coast is not None:
+        settings.coast_minutes = coast
     if changes:
         _log_event('settings', ', '.join(changes))
     db.session.commit()
