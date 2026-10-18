@@ -187,3 +187,39 @@ The `xset` lines stop the screen going blank, and the `until` loop waits for the
 service to come up so the browser never starts on an error page. To leave kiosk mode,
 press `Alt+F4`, or from another machine run `ssh pi@<ip> pkill chromium`. On the newer
 "Bookworm" OS (Wayland) the autostart file is different; ask and we'll adapt it.
+
+## Data and backups
+
+The database lives **outside the git repo**, at `~/keezer-data/app.db` (override with
+`KEEZER_DATA_DIR` or `DATABASE_URL`). Git can silently overwrite or delete files inside
+the repo when you switch branches or pull, so never keep live data there.
+
+Existing installs that still have `app/app.db` keep working until you move it:
+
+```
+cd ~/Documents/code/flask_fridge
+cp app/app.db ~/app.db.before-move            # a safety copy first
+sudo systemctl stop keezer keezer-web keezer-watchdog.timer
+mkdir -p ~/keezer-data && cp app/app.db ~/keezer-data/app.db
+python -c "import sqlite3; print(sqlite3.connect('/home/pi/keezer-data/app.db').execute('select count(*) from reading').fetchone())"
+mv app/app.db app/app.db.moved
+sudo systemctl start keezer keezer-web keezer-watchdog.timer
+```
+
+A nightly backup (03:30, kept for 14 days, in `~/keezer-backups`) is installed with:
+
+```
+sudo cp deploy/keezer-backup.service deploy/keezer-backup.timer /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now keezer-backup.timer
+python -m app.scripts.backup                  # run one now to check it works
+```
+
+Restore from a backup:
+
+```
+sudo systemctl stop keezer keezer-web keezer-watchdog.timer
+cp ~/keezer-backups/app.db.<timestamp> ~/keezer-data/app.db
+sudo systemctl start keezer keezer-web keezer-watchdog.timer
+```
+
+Take a backup (`python -m app.scripts.backup`) before every `flask db upgrade`.
