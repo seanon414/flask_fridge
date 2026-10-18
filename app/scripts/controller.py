@@ -16,7 +16,8 @@ import time
 from datetime import datetime, timedelta
 
 from app import app, db
-from app.models.temp import Reading, get_settings
+from app.models.temp import Event, Reading, get_settings
+from app.scripts import alerts
 from app.scripts.control_logic import decide
 from app.scripts.fridge_control import set_fridge
 from app.scripts.thermometer import read_temp
@@ -30,10 +31,11 @@ PRUNE_EVERY_SECONDS = 3600
 
 
 class Controller(object):
-    def __init__(self, sensor=read_temp, switch=set_fridge, clock=time.time):
+    def __init__(self, sensor=read_temp, switch=set_fridge, clock=time.time, alert_manager=None):
         self._sensor = sensor
         self._switch = switch
         self._clock = clock
+        self.alerts = alert_manager or alerts.AlertManager(alerts.Notifier())
         self._lock = threading.Lock()   # guards the state below
         self.fridge_on = None           # None = unknown
         self.last_change = None
@@ -53,8 +55,17 @@ class Controller(object):
             return
         cutoff = datetime.utcnow() - timedelta(days=RETENTION_DAYS)
         Reading.query.filter(Reading.timestamp < cutoff).delete()
+        Event.query.filter(Event.timestamp < cutoff).delete()
         db.session.commit()
         self.last_prune = now
+
+    def _check_alerts(self, settings):
+        """Alerts must never be able to break temperature control."""
+        try:
+            self.alerts.update_many(alerts.evaluate(settings))
+        except Exception:
+            logger.exception('Alert check failed')
+            db.session.rollback()
 
     def step(self):
         """Run one control cycle. Must be called inside an app context."""
@@ -102,6 +113,7 @@ class Controller(object):
                                    fridge_on=self.fridge_on))
             db.session.commit()
             self._prune(now)
+            self._check_alerts(settings)
 
 
 def run(stop_event=None, poll_seconds=POLL_SECONDS):

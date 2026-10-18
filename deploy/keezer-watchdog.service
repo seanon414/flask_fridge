@@ -1,0 +1,10 @@
+[Unit]
+Description=Keezer watchdog (alerts if the controller stops logging readings)
+After=network.target
+
+[Service]
+Type=oneshot
+User=pi
+WorkingDirectory=/home/pi/Documents/code/flask_fridge
+EnvironmentFile=-/home/pi/Documents/code/flask_fridge/.env
+ExecStart=/home/pi/Documents/code/flask_fridge/venv/bin/python -m app.scripts.watchdog

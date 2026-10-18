@@ -40,7 +40,10 @@ function statusBody(o) {
     reading_at: iso(Date.now() - 10000),
     age_seconds: 10,
     controller_ok: true,
-    sensor_ok: true
+    sensor_ok: true,
+    alerts: [],
+    notifications_enabled: false,
+    version: 'v1'
   }, o);
 }
 
@@ -53,9 +56,10 @@ function points(fromAgoH, toAgoH, stepMin) {
   return out;
 }
 
-function historyBody(pts, stats) {
+function historyBody(pts, stats, events) {
   return {
     points: pts,
+    events: events || [],
     stats: stats || { min: 36, max: 39, avg: 37.5, duty_percent: 15, samples: pts.length }
   };
 }
@@ -74,8 +78,9 @@ async function boot(t, opts) {
   };
   const calls = [];
   const draws = [];
+  const reloads = { count: 0 };
 
-  const dom = new JSDOM(HTML, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/' });
+  const dom = new JSDOM(HTML, { runScripts: 'outside-only', pretendToBeVisual: true, url: opts.url || 'http://localhost/' });
   const win = dom.window;
   t.after(() => win.close());
 
@@ -88,7 +93,7 @@ async function boot(t, opts) {
     set(target, prop, value) { target[prop] = value; return true; }
   });
   win.HTMLCanvasElement.prototype.getContext = () => ctx;
-  Object.defineProperty(win.HTMLCanvasElement.prototype, 'clientWidth', { get: () => 600 });
+  Object.defineProperty(win.HTMLCanvasElement.prototype, 'clientWidth', { get: () => opts.canvasWidth || 600 });
   Object.defineProperty(win.HTMLCanvasElement.prototype, 'clientHeight', { get: () => 300 });
 
   win.fetch = (url, init) => {
@@ -114,13 +119,16 @@ async function boot(t, opts) {
     return Promise.resolve({ ok: res.status < 400, status: res.status, json: () => Promise.resolve(res.body) });
   };
 
+  win.keezerReload = () => { reloads.count += 1; };
+  if (opts.idleMs) { win.keezerIdleMs = opts.idleMs; }
+
   win.eval(APP_JS);
   await settle();
 
   const $ = (id) => win.document.getElementById(id);
   const click = (selector) => { win.document.querySelector(selector).click(); };
   const posts = () => calls.filter((c) => c.method === 'POST');
-  return { win, $, click, calls, posts, draws, state, settle };
+  return { win, $, click, calls, posts, draws, state, settle, reloads, ctx };
 }
 
 /* ---------- status rendering ---------- */
@@ -131,7 +139,7 @@ test('renders live status', async (t) => {
   assert.equal(ui.$('delta').textContent, 'Within target range');
   assert.equal(ui.$('fridge-state').dataset.state, 'on');
   assert.equal(ui.$('fridge-state-text').textContent, 'Cooling');
-  assert.equal(ui.$('fact-target').textContent, '38');
+  assert.equal(ui.$('fact-target').textContent, '38.0');
   assert.equal(ui.$('fact-range').textContent, '37.0–39.0' + DEG);
   assert.equal(ui.$('fact-mode').textContent, 'Auto');
   assert.equal(ui.$('pill-controller').dataset.state, 'ok');
@@ -191,25 +199,25 @@ test('unreachable server shows a retry banner', async (t) => {
 
 test('steppers edit the form, update the hint and enable Apply', async (t) => {
   const ui = await boot(t);
-  assert.equal(ui.$('target').value, '38');
+  assert.equal(ui.$('target').value, '38.0');
   assert.equal(ui.$('hysteresis').value, '1.0');
   assert.equal(ui.$('apply').disabled, true);
 
-  ui.click('[data-for="target"][data-step="1"]');
+  ui.click('[data-for="target"][data-step="0.5"]');
   ui.click('[data-for="hysteresis"][data-step="0.5"]');
 
-  assert.equal(ui.$('target').value, '39');
+  assert.equal(ui.$('target').value, '38.5');
   assert.equal(ui.$('hysteresis').value, '1.5');
   assert.equal(ui.$('apply').disabled, false);
   assert.equal(ui.$('band-hint').textContent,
-    'Starts cooling above 40.5' + DEG + 'F, stops below 37.5' + DEG + 'F.');
+    'Starts cooling above 40.0' + DEG + 'F, stops below 37.0' + DEG + 'F.');
 });
 
 test('steppers stop at the allowed limits', async (t) => {
   const ui = await boot(t);
   ui.$('target').value = '70';
-  for (let i = 0; i < 3; i++) { ui.click('[data-for="target"][data-step="1"]'); }
-  assert.equal(ui.$('target').value, '70');
+  for (let i = 0; i < 3; i++) { ui.click('[data-for="target"][data-step="0.5"]'); }
+  assert.equal(ui.$('target').value, '70.0');
   ui.$('hysteresis').value = '0.5';
   ui.click('[data-for="hysteresis"][data-step="-0.5"]');
   assert.equal(ui.$('hysteresis').value, '0.5');
@@ -223,26 +231,36 @@ test('invalid input disables Apply and explains the limits', async (t) => {
   assert.match(ui.$('band-hint').textContent, /20.70/);
 });
 
+test('a target that is not a half-degree step is rejected before sending', async (t) => {
+  const ui = await boot(t);
+  ui.$('target').value = '38.3';
+  ui.$('target').dispatchEvent(new ui.win.Event('input'));
+  assert.equal(ui.$('apply').disabled, true);
+  ui.$('target').value = '38.5';
+  ui.$('target').dispatchEvent(new ui.win.Event('input'));
+  assert.equal(ui.$('apply').disabled, false);
+});
+
 test('Apply posts the settings with the CSRF token', async (t) => {
   const ui = await boot(t);
-  ui.click('[data-for="target"][data-step="1"]');
+  ui.click('[data-for="target"][data-step="0.5"]');
   ui.click('#apply');
   await ui.settle();
 
   const [post] = ui.posts();
   assert.equal(post.url, '/api/settings');
-  assert.deepEqual(post.body, { target_temp: 39, hysteresis: 1 });
+  assert.deepEqual(post.body, { target_temp: 38.5, hysteresis: 1 });
   assert.equal(post.headers['X-CSRFToken'], 'test-token');
   assert.equal(post.headers['Content-Type'], 'application/json');
   assert.equal(ui.$('toast').hidden, false);
   assert.match(ui.$('toast').textContent, /Saved/);
-  assert.equal(ui.$('fact-target').textContent, '39');   // refreshed from the server
+  assert.equal(ui.$('fact-target').textContent, '38.5');   // refreshed from the server
 });
 
 test('a rejected save shows the server message and re-enables Apply', async (t) => {
   const ui = await boot(t);
   ui.state.responses.settings = { status: 400, body: { error: 'target_temp must be between 20 and 70' } };
-  ui.click('[data-for="target"][data-step="1"]');
+  ui.click('[data-for="target"][data-step="0.5"]');
   ui.click('#apply');
   await ui.settle();
   assert.equal(ui.$('toast').textContent, 'target_temp must be between 20 and 70');
@@ -357,4 +375,206 @@ test('tooltip stays hidden over the empty "No data" area', async (t) => {
   const ui = await boot(t, { history: historyBody(points(2, 0, 1)) });
   hover(ui, 100);   // far from the readings bunched at the right edge
   assert.equal(ui.$('tooltip').hidden, true);
+});
+
+/* ---------- page title ---------- */
+
+test('page title carries the live temperature', async (t) => {
+  const ui = await boot(t);
+  assert.equal(ui.win.document.title, '37.5' + DEG + 'F · Keezer');
+});
+
+test('page title warns when the controller is silent or an alert is active', async (t) => {
+  let ui = await boot(t, { status: statusBody({ controller_ok: false, age_seconds: 900 }) });
+  assert.equal(ui.win.document.title, '⚠ Keezer');
+  ui = await boot(t, { status: statusBody({ alerts: [{ key: 'too_warm', message: 'Too warm', since: iso(Date.now()) }] }) });
+  assert.equal(ui.win.document.title, '⚠ 37.5' + DEG + 'F · Keezer');
+});
+
+/* ---------- alerts ---------- */
+
+test('active alerts are listed with their start time', async (t) => {
+  const alerts = [
+    { key: 'too_warm', message: 'Too warm: 44.0' + DEG + 'F for 30+ min.', since: iso(Date.now() - 40 * 60000) },
+    { key: 'sensor', message: 'No valid sensor reading.', since: null }
+  ];
+  const ui = await boot(t, { status: statusBody({ alerts, notifications_enabled: true }) });
+  const items = ui.$('alerts').querySelectorAll('li');
+  assert.equal(ui.$('alerts').hidden, false);
+  assert.equal(items.length, 2);
+  assert.match(items[0].textContent, /Too warm: 44.0/);
+  assert.match(items[0].textContent, /since /);
+  assert.doesNotMatch(items[1].textContent, /since /);
+});
+
+test('no active alerts hides the list', async (t) => {
+  const ui = await boot(t);
+  assert.equal(ui.$('alerts').hidden, true);
+});
+
+test('alerts pill shows off, on, or firing', async (t) => {
+  let ui = await boot(t);
+  assert.equal(ui.$('pill-alerts').dataset.state, 'unknown');
+  ui = await boot(t, { status: statusBody({ notifications_enabled: true }) });
+  assert.equal(ui.$('pill-alerts').dataset.state, 'ok');
+  ui = await boot(t, { status: statusBody({ notifications_enabled: true, alerts: [{ key: 'sensor', message: 'x', since: null }] }) });
+  assert.equal(ui.$('pill-alerts').dataset.state, 'bad');
+});
+
+/* ---------- setting-change events on the chart ---------- */
+
+const eventAt = (hoursAgo, detail, kind) => ({ t: iso(Date.now() - hoursAgo * HOUR), kind: kind || 'settings', detail });
+const markerCount = (ui) => {
+  ui.draws.length = 0;
+  ui.win.dispatchEvent(new ui.win.Event('resize'));
+  return ui.draws.filter((d) => d[0] === 'setLineDash' && d[1].join() === '3,3').length;
+};
+
+test('chart draws one marker per setting change inside the window', async (t) => {
+  const events = [eventAt(6, 'Target 38.0 → 39.0' + DEG + 'F'), eventAt(2, 'Forced on → Auto', 'mode'), eventAt(30, 'too old')];
+  const ui = await boot(t, { history: historyBody(points(24.1, 0, 5), null, events) });
+  assert.equal(markerCount(ui), 2);   // the 30h-old one is outside the 24h window
+});
+
+test('no events means no markers', async (t) => {
+  const ui = await boot(t);
+  assert.equal(markerCount(ui), 0);
+});
+
+test('hovering a marker shows what changed, in preference to the reading', async (t) => {
+  const detail = 'Target 38.0 → 39.0' + DEG + 'F';
+  const ui = await boot(t, { history: historyBody(points(24.1, 0, 5), null, [eventAt(6, detail)]) });
+  hover(ui, 452);   // 6h ago: 40 + 550 * 18/24
+  assert.equal(ui.$('tooltip').hidden, false);
+  assert.match(ui.$('tooltip').textContent, /Setting changed/);
+  assert.ok(ui.$('tooltip').textContent.includes(detail));
+  hover(ui, 300);   // well away from the marker: back to a normal reading tooltip
+  assert.match(ui.$('tooltip').textContent, /Target 38\.0/);
+  assert.doesNotMatch(ui.$('tooltip').textContent, /Setting changed/);
+});
+
+/* ---------- target line ---------- */
+
+const dashedLines = (ui, pattern) => {
+  ui.draws.length = 0;
+  ui.win.dispatchEvent(new ui.win.Event('resize'));
+  return ui.draws.filter((d) => d[0] === 'setLineDash' && d[1].join() === pattern).length;
+};
+
+test('chart draws a dashed target line when there is data', async (t) => {
+  const ui = await boot(t);
+  assert.ok(dashedLines(ui, '6,4') >= 1);
+});
+
+test('no data means no target line', async (t) => {
+  const ui = await boot(t, { history: historyBody([], { min: null, max: null, avg: null, duty_percent: null, samples: 0 }) });
+  assert.equal(dashedLines(ui, '6,4'), 0);
+});
+
+/* ---------- chart scales with its size ---------- */
+
+test('chart text grows on a wide canvas and stays small on a phone', async (t) => {
+  const phone = await boot(t, { canvasWidth: 340 });
+  phone.win.dispatchEvent(new phone.win.Event('resize'));
+  assert.equal(phone.ctx.font, '11px system-ui, sans-serif');
+
+  const wall = await boot(t, { canvasWidth: 1500 });
+  wall.win.dispatchEvent(new wall.win.Event('resize'));
+  assert.equal(wall.ctx.font, '20px system-ui, sans-serif');
+
+  const desktop = await boot(t, { canvasWidth: 600 });
+  desktop.win.dispatchEvent(new desktop.win.Event('resize'));
+  assert.equal(desktop.ctx.font, '11px system-ui, sans-serif');
+});
+
+/* ---------- self-reload when the server has new code ---------- */
+
+test('reloads itself when the server version changes', async (t) => {
+  const ui = await boot(t);
+  assert.equal(ui.reloads.count, 0);
+
+  ui.win.document.dispatchEvent(new ui.win.Event('visibilitychange'));   // same version
+  await ui.settle();
+  assert.equal(ui.reloads.count, 0);
+
+  ui.state.status.version = 'v2';                                          // the Pi was updated
+  ui.win.document.dispatchEvent(new ui.win.Event('visibilitychange'));
+  await ui.settle();
+  assert.equal(ui.reloads.count, 1);
+});
+
+test('does not reload while you are editing the settings', async (t) => {
+  const ui = await boot(t);
+  ui.click('[data-for="target"][data-step="0.5"]');                       // unsaved edit
+  ui.state.status.version = 'v2';
+  ui.win.document.dispatchEvent(new ui.win.Event('visibilitychange'));
+  await ui.settle();
+  assert.equal(ui.reloads.count, 0);
+  assert.equal(ui.$('target').value, '38.5');                              // edit intact
+});
+
+test('a server that reports no version never triggers a reload', async (t) => {
+  const ui = await boot(t, { status: statusBody({ version: undefined }) });
+  ui.win.document.dispatchEvent(new ui.win.Event('visibilitychange'));
+  await ui.settle();
+  assert.equal(ui.reloads.count, 0);
+});
+
+/* ---------- wall display mode ---------- */
+
+test('?display=1 switches on the wall display layout', async (t) => {
+  const wall = await boot(t, { url: 'http://localhost/?display=1' });
+  assert.ok(wall.win.document.documentElement.classList.contains('display'));
+  const normal = await boot(t);
+  assert.ok(!normal.win.document.documentElement.classList.contains('display'));
+  const other = await boot(t, { url: 'http://localhost/?displays=1&x=display' });
+  assert.ok(!other.win.document.documentElement.classList.contains('display'));
+});
+
+/* ---------- idle reset ---------- */
+
+test('another range snaps back to 24h after sitting idle', async (t) => {
+  const ui = await boot(t, { idleMs: 40 });
+  ui.click('[data-hours="1"]');
+  await ui.settle();
+  assert.ok(ui.$('range').querySelector('[data-hours="1"]').classList.contains('active'));
+
+  await new Promise((r) => setTimeout(r, 150));
+  await ui.settle();
+  assert.ok(ui.$('range').querySelector('[data-hours="24"]').classList.contains('active'));
+  assert.ok(!ui.$('range').querySelector('[data-hours="1"]').classList.contains('active'));
+  assert.equal(ui.calls.filter((c) => c.url === '/api/history?hours=24').length, 2);   // initial load + the reset
+});
+
+test('the default range does not start a reset timer', async (t) => {
+  const ui = await boot(t, { idleMs: 20 });
+  ui.click('[data-hours="24"]');
+  await new Promise((r) => setTimeout(r, 100));
+  await ui.settle();
+  assert.equal(ui.calls.filter((c) => c.url === '/api/history?hours=24').length, 2);   // initial + the click, nothing more
+});
+
+test('the wall display keeps the controls unless readonly is added', async (t) => {
+  const wall = await boot(t, { url: 'http://localhost/?display=1' });
+  assert.ok(wall.win.document.documentElement.classList.contains('display'));
+  assert.ok(!wall.win.document.documentElement.classList.contains('readonly'));
+
+  const locked = await boot(t, { url: 'http://localhost/?display=1&readonly=1' });
+  assert.ok(locked.win.document.documentElement.classList.contains('display'));
+  assert.ok(locked.win.document.documentElement.classList.contains('readonly'));
+
+  const stray = await boot(t, { url: 'http://localhost/?readonly=1' });      // readonly alone does nothing
+  assert.ok(!stray.win.document.documentElement.classList.contains('readonly'));
+});
+
+test('the controls work in the wall display (mouse and keyboard)', async (t) => {
+  const ui = await boot(t, { url: 'http://localhost/?display=1' });
+  ui.click('[data-for="target"][data-step="0.5"]');
+  ui.click('#apply');
+  await ui.settle();
+  assert.deepEqual(ui.posts()[0].body, { target_temp: 38.5, hysteresis: 1 });
+
+  ui.click('[data-mode="off"]');
+  await ui.settle();
+  assert.deepEqual(ui.posts()[1].body, { mode: 'off' });
 });

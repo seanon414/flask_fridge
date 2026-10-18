@@ -12,6 +12,7 @@
   --warn: #ffb454;
   --bad: #ff6b6b;
   --on: #ffb454;
+  --event: #b392f0;        /* setting-change markers */
   --radius: 16px;
   --shadow: 0 1px 0 rgba(255, 255, 255, .03) inset, 0 8px 24px rgba(0, 0, 0, .25);
   color-scheme: dark;
@@ -84,6 +85,16 @@ h2 { font-size: 1rem; }
 }
 .banner[data-level="bad"] { background: #2a1519; border-color: #5a2d36; color: #ffc2c2; }
 
+/* ---- active alerts ---- */
+.alerts { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.alerts li {
+  display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px;
+  padding: 12px 14px; border-radius: 12px; font-size: .92rem;
+  background: #2a1519; border: 1px solid #5a2d36; color: #ffc2c2;
+}
+.alerts small { color: #d99; }
+@media (min-width: 880px) { .alerts { grid-column: 1 / -1; } }
+
 /* ---- hero ---- */
 .hero { display: grid; gap: 18px; grid-template-columns: 1fr; }
 @media (min-width: 600px) { .hero { grid-template-columns: 1.1fr 1fr; align-items: center; } }
@@ -120,6 +131,7 @@ canvas { width: 100%; height: 100%; display: block; touch-action: pan-y; }
   font-variant-numeric: tabular-nums;
 }
 .tooltip b { font-size: 1rem; color: var(--accent); }
+.tooltip b.event-title { color: var(--event); }
 .empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); }
 
 .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 10px 0 14px; font-size: .8rem; color: var(--muted); }
@@ -127,6 +139,7 @@ canvas { width: 100%; height: 100%; display: block; touch-action: pan-y; }
 .sw.line { width: 16px; height: 3px; background: var(--accent); border-radius: 2px; }
 .sw.band { width: 16px; height: 10px; background: rgba(76, 201, 240, .18); border: 1px solid rgba(76, 201, 240, .35); border-radius: 2px; }
 .sw.on { width: 16px; height: 6px; background: var(--on); border-radius: 2px; opacity: .85; }
+.sw.event { width: 0; height: 12px; border-left: 2px dashed var(--event); }
 
 .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; padding-top: 14px; border-top: 1px solid var(--line); margin: 0; }
 .stats > div { min-width: 0; }
@@ -183,3 +196,68 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .toast[data-level="bad"] { border-color: #5a2d36; color: #ffc2c2; }
 
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+
+/* ---- wall display: open /?display=1 ----
+   Scales with the screen and fills it: big temperature, tall chart, and the
+   controls in a panel beside the chart (for a mouse and keyboard on the Pi).
+   Add &readonly=1 to hide the controls. */
+html.display { font-size: clamp(16px, 1.15vw, 32px); }
+.display body { height: 100vh; overflow: hidden; }
+.display.idle, .display.idle * { cursor: none; }
+
+.display .topbar { max-width: none; padding: 1.6vh 2vw 0; }
+.display h1 { font-size: 1.7rem; }
+.display .pill { font-size: 1rem; padding: .35rem .9rem; gap: .5rem; }
+.display .pill i { width: .6rem; height: .6rem; }
+
+/* four fixed rows (banner, alerts, hero, main); empty ones collapse to nothing */
+.display .layout {
+  max-width: none; height: calc(100vh - 5.2rem); padding: 1.2vh 2vw 2vh;
+  display: grid; grid-template-columns: 1fr 26rem; grid-template-rows: auto auto auto 1fr;
+  column-gap: 1.6vh; row-gap: 0; align-items: stretch;
+}
+.display .layout > * { margin-bottom: 1.6vh; min-height: 0; }
+.display #banner { grid-column: 1 / -1; grid-row: 1; }
+.display #alerts { grid-column: 1 / -1; grid-row: 2; }
+.display .hero { grid-column: 1 / -1; grid-row: 3; }
+.display .chart-card { grid-column: 1; grid-row: 4; margin-bottom: 0; }
+.display .controls { grid-column: 2; grid-row: 4; margin-bottom: 0; overflow-y: auto; }
+.display.readonly .controls { display: none; }
+.display.readonly .chart-card { grid-column: 1 / -1; }
+
+.display .hero { grid-template-columns: 1fr 1fr; align-items: center; padding: 1.2vh 2vw; }
+.display .temp { font-size: 14vh; }
+.display .label { font-size: .95rem; }
+.display .delta { font-size: 1.5rem; }
+.display .state { font-size: 1.6rem; padding: .5rem 1.2rem; margin-bottom: 1.4vh; }
+.display .facts { grid-template-columns: repeat(4, auto); gap: 1.4vh 1.4vw; }
+.display .facts dt { font-size: .95rem; }
+.display .facts dd { font-size: 1.7rem; }
+
+.display .chart-card { display: flex; flex-direction: column; padding: 1.4vh 1.4vw; }
+.display .chart-card .card-head h2, .display .controls h2 { font-size: 1.3rem; }
+.display .seg button { font-size: 1.05rem; min-height: 0; padding: .45rem 1rem; }
+.display .chart-wrap { flex: 1; height: auto; min-height: 0; }
+.display .legend { font-size: 1rem; margin: 1vh 0; }
+.display .stats { padding-top: 1vh; }
+.display .stats dt { font-size: .95rem; }
+.display .stats dd { font-size: 1.5rem; }
+.display .banner { font-size: 1.3rem; }
+.display .alerts li { font-size: 1.3rem; }
+.display .tooltip { font-size: 1.1rem; }
+
+/* controls panel, sized for the wall */
+.display .controls { gap: 1.4vh; padding: 1.4vh 1.4vw; }
+.display .seg.wide button { min-height: 0; padding: .6rem .4rem; font-size: 1.05rem; }
+.display .stepper button { min-height: 0; width: 2.6rem; font-size: 1.5rem; }
+.display .stepper input { font-size: 1.4rem; padding: .5rem 0; }
+.display .hint { font-size: .95rem; }
+.display .primary { min-height: 0; padding: .8rem; font-size: 1.15rem; }
+.display .toast { font-size: 1.2rem; }
+
+/* shorter screens: drop the explanatory hints so the panel still fits */
+@media (max-height: 820px) {
+  .display .controls .hint { display: none; }
+  .display .controls { gap: .8vh; }
+}
+.display #mode-hint { display: none; }   /* the hero already shows the mode; keeps the panel from being tight */

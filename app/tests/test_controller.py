@@ -23,6 +23,18 @@ class FakeSwitch(object):
         return self.ok
 
 
+class FakeAlerts(object):
+    """Stands in for AlertManager so no test can ever send a notification."""
+    def __init__(self):
+        self.calls = []
+        self.fail = False
+
+    def update_many(self, conditions, now=None):
+        if self.fail:
+            raise RuntimeError('alerts are broken')
+        self.calls.append(conditions)
+
+
 @unittest.skipUnless(IN_MEMORY, 'set DATABASE_URL=sqlite:// to run controller tests')
 class ControllerTests(unittest.TestCase):
     def setUp(self):
@@ -37,6 +49,7 @@ class ControllerTests(unittest.TestCase):
         self.now = 1000.0
         self.temp = 38.0
         self.switch = FakeSwitch()
+        self.alerts = FakeAlerts()
         self.controller = self.make_controller()
 
         settings = get_settings()
@@ -57,7 +70,8 @@ class ControllerTests(unittest.TestCase):
             if self.temp is None:
                 return None, None
             return (self.temp - 32) / 1.8, self.temp
-        return self.Controller(sensor=sensor, switch=self.switch, clock=lambda: self.now)
+        return self.Controller(sensor=sensor, switch=self.switch, clock=lambda: self.now,
+                               alert_manager=self.alerts)
 
     def step(self, temp=None, advance=0):
         """Advance the clock, optionally change the temperature, run one cycle."""
@@ -216,6 +230,36 @@ class ControllerTests(unittest.TestCase):
         temps = sorted(r.temp_f for r in Reading.query.all())
         self.assertNotIn(40.0, temps)
         self.assertIn(41.0, temps)
+
+    def test_prunes_old_events_too(self):
+        from app.models.temp import Event
+        from app.scripts.controller import RETENTION_DAYS
+        db.session.add(Event(timestamp=datetime.utcnow() - timedelta(days=RETENTION_DAYS + 1),
+                             kind='mode', detail='ancient'))
+        db.session.add(Event(timestamp=datetime.utcnow() - timedelta(days=1),
+                             kind='mode', detail='yesterday'))
+        db.session.commit()
+        self.step(temp=36.0)
+        self.assertEqual([e.detail for e in Event.query.all()], ['yesterday'])
+
+    # --- alerts ---
+
+    def test_checks_alert_conditions_every_cycle(self):
+        self.step(temp=36.0)
+        self.step(advance=30)
+        self.assertEqual(len(self.alerts.calls), 2)
+        self.assertEqual(set(self.alerts.calls[0]), {'too_warm', 'too_cold', 'sensor'})
+
+    def test_a_failing_alert_check_never_stops_temperature_control(self):
+        self.alerts.fail = True
+        with self.assertLogs('app.scripts.controller', level='ERROR') as logs:
+            self.step(temp=41.0)
+        self.assertIn('Alert check failed', '\n'.join(logs.output))
+        self.assertEqual(self.switch.calls, [True])           # control still happened
+        self.assertEqual(self.last_reading().temp_f, 41.0)    # and the reading was logged
+        self.alerts.fail = False
+        self.step(advance=30)                                  # and the loop keeps working
+        self.assertEqual(len(self.alerts.calls), 1)
 
 
 if __name__ == '__main__':

@@ -133,3 +133,57 @@ The browser script is tested under Node with jsdom; the Pi never needs this.
 npm install
 npm test
 ```
+
+## Alerts
+
+Push notifications go through [ntfy](https://ntfy.sh) and are off until you set a topic.
+
+1. Install the ntfy app on your phone and subscribe to a long random topic name.
+2. Put it in `.env` (see `.env.example`): `NTFY_TOPIC=your-long-random-topic`
+3. Install the new units and restart (the controller now reads `.env` too):
+   ```
+   sudo cp deploy/*.service deploy/*.timer /etc/systemd/system/
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now keezer-watchdog.timer
+   sudo systemctl restart keezer keezer-web
+   ```
+4. Check it works: `set -a; . ./.env; set +a; python -m app.scripts.alerts test`
+
+You are alerted when the freezer is too warm or too cold for a sustained stretch
+(3 degF outside the band for 30 min by default), when the sensor has failed for
+10 min, or when the controller has stopped logging (the watchdog, every 2 min).
+Each alert is sent once, repeated after 6 h while it lasts, and followed by a
+"resolved" notice. Active alerts also show in the web UI.
+
+## Setting changes on the chart
+
+Target, swing and mode changes made in the UI are logged (`event` table) and drawn
+as dashed markers on the history chart; hover one to see what changed.
+
+## Wall display (a monitor on the Pi)
+
+Open `http://localhost:5000/?display=1` for a big view that fills the screen: large
+temperature, a tall history chart, and the controls in a panel beside it (for a mouse
+and keyboard on the Pi). Add `&readonly=1` to hide the controls. The page reloads
+itself when the server is updated, returns to the 24h chart after 5 idle minutes, and
+hides the mouse cursor when idle.
+
+To start it automatically in a full-screen kiosk browser on Raspberry Pi OS
+"Bullseye" (check with `cat /etc/os-release`; the desktop uses LXDE and X11):
+
+```
+mkdir -p ~/.config/lxsession/LXDE-pi
+cp /etc/xdg/lxsession/LXDE-pi/autostart ~/.config/lxsession/LXDE-pi/autostart
+cat >> ~/.config/lxsession/LXDE-pi/autostart <<'EOT'
+@xset s off
+@xset -dpms
+@xset s noblank
+@bash -c 'until curl -sf http://localhost:5000/api/status >/dev/null; do sleep 2; done; exec chromium-browser --kiosk --noerrdialogs --disable-infobars --disable-session-crashed-bubble --check-for-update-interval=31536000 "http://localhost:5000/?display=1"'
+EOT
+sudo reboot
+```
+
+The `xset` lines stop the screen going blank, and the `until` loop waits for the web
+service to come up so the browser never starts on an error page. To leave kiosk mode,
+press `Alt+F4`, or from another machine run `ssh pi@<ip> pkill chromium`. On the newer
+"Bookworm" OS (Wayland) the autostart file is different; ask and we'll adapt it.
