@@ -1,0 +1,9 @@
+[Unit]
+Description=Keezer database backup
+
+[Service]
+Type=oneshot
+User=pi
+WorkingDirectory=/home/pi/Documents/code/flask_fridge
+EnvironmentFile=-/home/pi/Documents/code/flask_fridge/.env
+ExecStart=/home/pi/Documents/code/flask_fridge/venv/bin/python -m app.scripts.backup

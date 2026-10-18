@@ -1,0 +1,10 @@
+[Unit]
+Description=Back up the keezer database every night
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target
