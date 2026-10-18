@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 560" width="1000" height="560" font-family="-apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif">
+<title>One real cooling cycle of the keezer with a plain thermostat</title>
+<desc>Temperature over 24 hours. The compressor starts at 39.5F and stops at 38.5F, but the temperature keeps falling about 1.65F more to a low near 36.7F before slowly rising again.</desc>
+<rect width="1000" height="560" rx="14" fill="#0f1722"/>
+<text x="64" y="34" fill="#e8eef7" font-size="20" font-weight="700">The problem coast-aware control solves</text>
+<text x="64" y="56" fill="#93a4bb" font-size="13">24 hours of real readings from the keezer (target 39.0°F, swing ±0.5°F, plain thermostat). Each cycle dips far below the low edge.</text>
+<line x1="64" x2="972" y1="370.0" y2="370.0" stroke="#223044" stroke-width="1"/>
+<text x="54" y="374.0" fill="#7d8ea6" font-size="12" text-anchor="end">36°</text>
+<line x1="64" x2="972" y1="300.5" y2="300.5" stroke="#223044" stroke-width="1"/>
+<text x="54" y="304.5" fill="#7d8ea6" font-size="12" text-anchor="end">37°</text>
+<line x1="64" x2="972" y1="231.0" y2="231.0" stroke="#223044" stroke-width="1"/>
+<text x="54" y="235.0" fill="#7d8ea6" font-size="12" text-anchor="end">38°</text>
+<line x1="64" x2="972" y1="161.4" y2="161.4" stroke="#223044" stroke-width="1"/>
+<text x="54" y="165.4" fill="#7d8ea6" font-size="12" text-anchor="end">39°</text>
+<line x1="64" x2="972" y1="91.9" y2="91.9" stroke="#223044" stroke-width="1"/>
+<text x="54" y="95.9" fill="#7d8ea6" font-size="12" text-anchor="end">40°</text>
+<line x1="205.3" x2="205.3" y1="78" y2="370" stroke="#182334" stroke-width="1"/>
+<text x="205.3" y="390" fill="#7d8ea6" font-size="12" text-anchor="middle">12 AM</text>
+<line x1="365.9" x2="365.9" y1="78" y2="370" stroke="#182334" stroke-width="1"/>
+<text x="365.9" y="390" fill="#7d8ea6" font-size="12" text-anchor="middle">4 AM</text>
+<line x1="526.4" x2="526.4" y1="78" y2="370" stroke="#182334" stroke-width="1"/>
+<text x="526.4" y="390" fill="#7d8ea6" font-size="12" text-anchor="middle">8 AM</text>
+<line x1="687.0" x2="687.0" y1="78" y2="370" stroke="#182334" stroke-width="1"/>
+<text x="687.0" y="390" fill="#7d8ea6" font-size="12" text-anchor="middle">12 PM</text>
+<line x1="847.5" x2="847.5" y1="78" y2="370" stroke="#182334" stroke-width="1"/>
+<text x="847.5" y="390" fill="#7d8ea6" font-size="12" text-anchor="middle">4 PM</text>
+<rect x="64" y="126.7" width="908" height="69.5" fill="#4cc9f0" fill-opacity="0.13"/>
+<line x1="64" x2="972" y1="161.4" y2="161.4" stroke="#4cc9f0" stroke-opacity="0.55" stroke-dasharray="6 5"/>
+<text x="966" y="120.7" fill="#7fd3ee" font-size="12" text-anchor="end">target band 38.5 – 39.5°F</text>
+<text x="54" y="417" fill="#7d8ea6" font-size="11" text-anchor="end">on</text>
+<rect x="88.0" y="408" width="3.1" height="10" rx="2" fill="#f0a04b"/>
+<rect x="91.1" y="408" width="3.1" height="10" rx="2" fill="#f0a04b"/>
+<rect x="94.2" y="408" width="3.1" height="10" rx="2" fill="#f0a04b"/>
+<rect x="97.3" y="408" width="3.1" height="10" rx="2" fill="#f0a04b"/>
+<rect x="100.4" y="408" width="3.1" height="10" rx="2" fill="#f0a04b"/>
+<rect x="274.5" y="408" width="3.1" height="10" rx="2" fill="#f0a04b"/>
+<rect x="277.6" y="408" width="3.1" height="10" rx="2" fill="#f0a04b"/>
+<rect x="280.7" y="408" width="3.1" height="10" rx="2" fill="#f0a04b"/>
+<rect x="283.8" y="408" width="3.1" height="10" rx="2" fill="#f0a04b"/>
+<rect x="286.9" y="408" width="3.1" height="10" rx="2" fill="#f0a04b"/>
+<rect x="463.9" y="408" width="3.1" height="10" rx="2" fill="#f0a04b"/>
+<rect x="467.0" y="408" width="3.1" height="10" rx="2" fill="#f0a04b"/>
+<rect x="470.1" y="408" width="3.1" height="10" rx="2" fill="#f0a04b"/>
+<rect x="473.2" y="408" width="3.1" height="10" rx="2" fill="#f0a04b"/>
+<rect x="476.3" y="408" width="3.1" height="10" rx="2" fill="#f0a04b"/>
+<rect x="479.5" y="408" width="3.1" height="10" rx="2" fill="#f0a04b"/>
+<rect x="662.7" y="408" width="3.1" height="10" rx="2" fill="#f0a04b"/>
+<rect x="665.8" y="408" width="3.1" height="10" rx="2" fill="#f0a04b"/>
+<rect x="668.9" y="408" width="3.1" height="10" rx="2" fill="#f0a04b"/>
+<rect x="672.0" y="408" width="3.1" height="10" rx="2" fill="#f0a04b"/>
+<rect x="675.1" y="408" width="3.1" height="10" rx="2" fill="#f0a04b"/>
+<rect x="839.9" y="408" width="4.8" height="10" rx="2" fill="#f0a04b"/>
+<rect x="844.6" y="408" width="3.1" height="10" rx="2" fill="#f0a04b"/>
+<rect x="847.8" y="408" width="3.1" height="10" rx="2" fill="#f0a04b"/>
+<rect x="850.9" y="408" width="3.1" height="10" rx="2" fill="#f0a04b"/>
+<rect x="854.0" y="408" width="3.1" height="10" rx="2" fill="#f0a04b"/>
+<rect x="857.1" y="408" width="3.1" height="10" rx="2" fill="#f0a04b"/>
+<polyline fill="none" stroke="#4cc9f0" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round" points="64.0,183.0 67.1,174.6 70.2,167.7 73.3,161.4 76.4,153.1 79.5,144.7 82.6,137.8 88.0,125.3 91.1,123.9 94.2,132.2 97.3,149.6 100.4,172.6 103.5,200.4 106.6,221.2 109.7,237.2 112.8,251.1 115.9,261.5 119.0,271.3 122.1,280.3 125.3,287.3 128.4,294.2 131.5,297.7 134.6,304.0 137.7,304.6 140.8,311.6 143.9,311.6 147.0,311.6 150.1,311.6 153.2,311.6 156.4,311.6 159.5,311.6 162.6,311.6 165.7,311.6 168.8,311.6 171.9,310.2 175.0,304.0 178.1,304.0 181.2,304.0 184.3,301.2 187.4,296.3 190.6,296.3 193.7,293.5 196.8,288.0 199.9,287.3 203.0,281.7 206.2,280.3 209.3,272.7 212.4,267.8 215.5,264.3 218.6,257.4 221.7,251.1 224.8,244.9 227.9,237.2 231.0,231.0 234.1,224.7 237.2,217.7 240.3,210.8 243.4,202.4 246.5,195.5 249.6,187.8 252.7,181.6 255.8,173.9 258.9,164.9 262.0,158.0 265.2,150.3 268.3,141.3 271.4,134.3 274.5,125.3 277.6,123.9 280.7,132.2 283.8,150.3 286.9,172.6 290.0,200.4 293.1,224.7 296.2,240.0 299.3,252.5 302.4,264.3 305.6,275.4 308.7,282.4 311.8,290.0 314.9,297.0 318.0,303.3 321.1,304.6 324.2,311.6 327.3,311.6 330.4,313.0 333.5,318.6 336.6,319.2 339.7,319.2 342.8,319.2 345.9,317.9 349.0,314.4 352.1,311.6 355.2,311.6 358.3,311.6 361.4,311.6 364.5,310.9 367.7,304.6 370.8,304.0 373.9,304.0 377.0,299.8 380.1,296.3 383.2,296.3 386.3,290.7 389.4,288.0 392.5,283.8 395.6,280.3 398.7,275.4 401.8,269.9 404.9,264.3 408.0,258.1 411.1,251.1 414.2,244.2 417.3,240.0 420.4,233.0 423.5,224.7 426.6,217.7 429.7,210.8 432.8,203.8 436.0,198.3 439.1,189.9 442.2,184.4 445.3,176.0 448.4,168.4 451.5,160.0 454.6,151.7 457.7,144.0 460.8,136.4 463.9,127.4 467.0,123.9 470.1,125.3 473.2,137.1 476.3,155.2 479.5,179.5 482.6,206.6 485.7,228.2 488.8,244.2 491.9,255.3 495.0,267.8 498.1,276.8 501.2,285.2 504.3,292.1 507.4,297.0 510.5,304.0 513.6,306.7 516.7,311.6 519.8,313.7 522.9,319.2 526.0,319.2 529.1,319.2 532.2,319.2 535.3,319.2 538.5,319.2 541.6,319.2 544.7,319.2 547.8,318.6 550.9,311.6 554.0,311.6 557.1,311.6 560.2,311.6 563.3,309.5 566.4,304.0 569.5,304.0 572.6,304.0 575.7,297.0 578.8,296.3 581.9,293.5 585.0,288.0 588.1,285.2 591.2,280.3 594.4,274.8 597.5,271.3 600.6,265.0 603.7,257.4 606.8,252.5 609.9,247.6 613.0,240.7 616.1,233.7 619.2,226.8 622.3,220.5 625.4,215.7 628.5,208.7 631.7,200.4 634.8,194.8 637.9,186.5 641.0,178.8 644.1,171.2 647.2,164.2 650.3,154.5 653.4,146.8 656.5,139.9 659.6,130.8 662.7,123.9 665.8,123.9 668.9,135.7 672.0,153.8 675.1,177.4 678.2,205.9 681.4,226.8 684.5,240.7 687.6,253.9 690.7,265.0 693.8,274.8 696.9,281.7 700.0,290.0 703.1,296.3 706.3,300.5 709.4,304.0 712.5,306.0 715.6,311.6 718.8,311.6 721.9,311.6 725.0,315.1 728.1,313.0 731.3,311.6 734.4,311.6 737.5,311.6 740.6,311.6 743.7,310.9 746.8,307.4 749.9,304.0 753.0,304.0 756.2,300.5 759.3,296.3 762.4,296.3 765.5,292.8 768.6,288.0 771.8,288.0 774.9,280.3 778.0,276.8 781.1,272.7 784.2,266.4 787.3,260.8 790.4,253.9 793.5,247.6 796.6,240.0 799.7,233.0 802.8,224.7 807.3,215.7 810.4,203.1 815.0,195.5 818.1,187.8 821.2,179.5 824.3,171.2 827.4,162.8 830.5,155.2 833.6,147.5 836.8,139.2 839.9,125.3 844.6,123.9 847.8,126.7 850.9,143.4 854.0,164.9 857.1,192.0 860.2,217.0 863.3,231.0 866.4,244.9 869.5,256.0 872.6,267.8 875.7,275.4 878.8,283.1 881.9,289.4 885.0,296.3 888.1,299.1 891.2,304.0 894.4,304.0 897.5,309.5 900.5,311.6 903.6,311.6 906.7,311.6 909.8,311.6 912.9,311.6 916.0,311.6 919.1,311.6 922.2,310.9 925.3,304.6 928.5,304.0 931.6,304.0 934.7,301.2 937.8,296.3 940.9,296.3 944.0,294.2 947.1,288.0 950.2,287.3 953.3,280.3 956.4,278.2 959.5,272.7 962.6,266.4 965.7,260.8 968.8,255.3 972.0,249.0"/>
+<circle cx="467.0" cy="123.9" r="4" fill="#f0a04b"/>
+<circle cx="479.5" cy="179.5" r="4" fill="#f0a04b"/>
+<circle cx="522.9" cy="319.2" r="4" fill="#ff6b81"/>
+<line x1="493.5" y1="189.5" x2="493.5" y2="309.2" stroke="#ff6b81" stroke-width="2.2" stroke-dasharray="5 4"/>
+<path d="M 493.5 313.2 l -5 -9 l 10 0 z" fill="#ff6b81"/>
+<circle cx="447.0" cy="109.9" r="12" fill="#f0a04b" stroke="#0f1722" stroke-width="2"/>
+<text x="447.0" y="114.4" fill="#0f1722" font-size="13" font-weight="800" text-anchor="middle">1</text>
+<circle cx="499.5" cy="169.5" r="12" fill="#f0a04b" stroke="#0f1722" stroke-width="2"/>
+<text x="499.5" y="174.0" fill="#0f1722" font-size="13" font-weight="800" text-anchor="middle">2</text>
+<circle cx="509.5" cy="249.4" r="12" fill="#ff6b81" stroke="#0f1722" stroke-width="2"/>
+<text x="509.5" y="253.9" fill="#0f1722" font-size="13" font-weight="800" text-anchor="middle">3</text>
+<circle cx="516.9" cy="343.2" r="12" fill="#ff6b81" stroke="#0f1722" stroke-width="2"/>
+<text x="516.9" y="347.7" fill="#0f1722" font-size="13" font-weight="800" text-anchor="middle">4</text>
+<circle cx="618.8" cy="231.6" r="12" fill="#a9bad1" stroke="#0f1722" stroke-width="2"/>
+<text x="618.8" y="236.1" fill="#0f1722" font-size="13" font-weight="800" text-anchor="middle">5</text>
+<circle cx="72" cy="442" r="9" fill="#f0a04b"/>
+<text x="72" y="446" fill="#0f1722" font-size="11" font-weight="800" text-anchor="middle">1</text>
+<text x="90" y="446" fill="#cfd9e8" font-size="13">The compressor starts when the temperature reaches the 39.5°F high edge.</text>
+<circle cx="72" cy="464" r="9" fill="#f0a04b"/>
+<text x="72" y="468" fill="#0f1722" font-size="11" font-weight="800" text-anchor="middle">2</text>
+<text x="90" y="468" fill="#cfd9e8" font-size="13">About 25 minutes later it reaches the 38.5°F low edge and the controller stops it.</text>
+<circle cx="72" cy="486" r="9" fill="#ff6b81"/>
+<text x="72" y="490" fill="#0f1722" font-size="11" font-weight="800" text-anchor="middle">3</text>
+<text x="90" y="490" fill="#cfd9e8" font-size="13">The temperature keeps falling about 1.65°F more after the stop: the “coast”.</text>
+<circle cx="72" cy="508" r="9" fill="#ff6b81"/>
+<text x="72" y="512" fill="#0f1722" font-size="11" font-weight="800" text-anchor="middle">4</text>
+<text x="90" y="512" fill="#cfd9e8" font-size="13">It bottoms out near 36.7°F, almost 2°F under the band, so the average sits well under the target.</text>
+<circle cx="72" cy="530" r="9" fill="#a9bad1"/>
+<text x="72" y="534" fill="#0f1722" font-size="11" font-weight="800" text-anchor="middle">5</text>
+<text x="90" y="534" fill="#cfd9e8" font-size="13">Then it warms slowly (about 4 hours) until the high edge is reached again.</text>
+<text x="972" y="548" fill="#5f7089" font-size="11" text-anchor="end">orange strip = compressor running · times are the Pi's local time</text>
+</svg>
