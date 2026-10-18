@@ -202,6 +202,7 @@ Run this from the project folder on the Pi:
 ```
 mkdir -p ~/.config/lxsession/LXDE-pi
 cp /etc/xdg/lxsession/LXDE-pi/autostart ~/.config/lxsession/LXDE-pi/autostart
+sed -i '/xscreensaver/d' ~/.config/lxsession/LXDE-pi/autostart
 cat >> ~/.config/lxsession/LXDE-pi/autostart <<EOT
 @xset s off
 @xset -dpms
@@ -211,7 +212,10 @@ EOT
 sudo reboot
 ```
 
-The `xset` lines stop the screen going blank. [`deploy/kiosk.sh`](deploy/kiosk.sh) waits
+The `sed` line removes the default `xscreensaver`: left running, it blanks the screen
+with a random pattern after about 10 minutes without a keypress (it looks like a white
+or multicoloured screen, with the dashboard still running underneath), and `xset s off`
+does not stop it. The `xset` lines stop the screen going blank. [`deploy/kiosk.sh`](deploy/kiosk.sh) waits
 for the web service to come up, so the browser never starts on an error page, and then
 opens the dashboard full screen. It logs to `~/kiosk.log`; if the screen stays on the
 desktop, read that file first. It uses `127.0.0.1` rather than `localhost` on purpose:
