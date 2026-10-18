@@ -153,6 +153,11 @@ canvas { width: 100%; height: 100%; display: block; touch-action: pan-y; }
 }
 .control-group.two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 
+.explain { margin-top: 8px; font-size: .85rem; color: var(--muted); }
+.explain summary { cursor: pointer; width: fit-content; color: var(--accent); }
+.explain summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.explain p { margin: 8px 0 0; line-height: 1.45; }
+
 .seg { display: inline-flex; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 3px; gap: 2px; }
 .seg.wide { display: flex; }
 .seg.wide button { flex: 1; }
@@ -259,5 +264,17 @@ html.display { font-size: clamp(16px, 1.15vw, 32px); }
 @media (max-height: 820px) {
   .display .controls .hint { display: none; }
   .display .controls { gap: .8vh; }
+}
+.display .explain { font-size: .95rem; }
+
+/* how to leave the kiosk: only on the wall display, small and out of the way */
+.kiosk-help { display: none; }
+.display .kiosk-help {
+  display: block; position: fixed; left: 2vw; bottom: .5vh; margin: 0; z-index: 5;
+  font-size: .75rem; line-height: 1.2; color: var(--muted); opacity: .75; pointer-events: none;
+}
+.kiosk-help kbd {
+  font: inherit; font-weight: 600; padding: 0 .3em; border: 1px solid var(--line); border-radius: 4px;
+  background: var(--card-2); color: var(--text);
 }
 .display #mode-hint { display: none; }   /* the hero already shows the mode; keeps the panel from being tight */
