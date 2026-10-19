@@ -53,6 +53,7 @@ silent, and when a backup fails). The important rules:
 | `keezer-web.service` | The web UI and JSON API (Flask served by waitress on port 5000) | Always on, restarts after 10 s |
 | `keezer-watchdog.timer` | Alerts if the controller has not logged a reading for 5 min. `app/scripts/watchdog.py` | Every 2 min |
 | `keezer-backup.timer` | Consistent, integrity-checked copy of the database; keeps 14. `app/scripts/backup.py` | 03:30 nightly (catches up if the Pi was off) |
+| `keezer-deploy.timer` | Checks GitHub for a new `master` and installs it once its tests pass, restarting only what changed. `app/scripts/autodeploy.py` | 3 min after each run; 10 min after boot |
 | `deploy/kiosk.sh` | Waits for the web service, then opens the wall display in full-screen Chromium | Started by the desktop session autostart |
 
 All units read `.env` (gitignored) for secrets and tuning; see the configuration table in the

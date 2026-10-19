@@ -1,0 +1,13 @@
+[Unit]
+Description=Keezer auto-deploy (updates the Pi to the latest master once its tests pass)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=pi
+WorkingDirectory=/home/pi/Documents/code/flask_fridge
+EnvironmentFile=-/home/pi/Documents/code/flask_fridge/.env
+ExecStart=/home/pi/Documents/code/flask_fridge/venv/bin/python -m app.scripts.autodeploy
+# fetching, testing, migrating and waiting for the controller can take a few minutes
+TimeoutStartSec=30min

@@ -53,6 +53,9 @@ Things to know:
 
 ## Updating
 
+Updates normally install themselves (see [Auto-deploy](#auto-deploy) below). This section is
+the manual version: use it when auto-deploy is switched off, or to see exactly what it does.
+
 Unit and data files live outside the code, so an update is a `git pull`, a database
 migration if there is one, and a service restart. Do it in this order:
 
@@ -97,6 +100,96 @@ Notes:
   works on the live database, which is why step 1 comes first.
 - `git pull --ff-only` refuses anything but a clean fast-forward. If it refuses, stop and
   look; do not force it.
+
+## Auto-deploy
+
+GitHub cannot reach a Pi on a home network, so the Pi asks GitHub instead. A timer
+(`keezer-deploy.timer`) runs `python -m app.scripts.autodeploy` three minutes after its
+previous run finished, and about 10 minutes after boot. So **a merged pull request reaches the
+Pi within a few minutes**, with nothing open to the internet and no software from GitHub running
+on the Pi.
+
+```mermaid
+flowchart TD
+    A["Timer: every few minutes"] --> B["git fetch origin master"]
+    B --> C{"Anything new?"}
+    C -- "no" --> Z["Done, quietly"]
+    C -- "yes" --> D{"Checkout clean and just behind master?"}
+    D -- "no" --> F1["Stop and notify"]
+    D -- "yes" --> E["Back up the database"]
+    E --> G["Run all the tests on a throwaway copy of the update"]
+    G --> H{"Pass?"}
+    H -- "no" --> F2["Stop and notify. Nothing on the Pi has changed"]
+    H -- "yes" --> I["Fast-forward, then install requirements,<br/>migrate and restart only what changed"]
+    I --> J{"Controller healthy within 2.5 min?"}
+    J -- "yes" --> K["Notify: updated"]
+    J -- "no" --> L["Put the old code back, restart, notify"]
+```
+
+What it restarts depends on what changed (`classify()` in `app/scripts/autodeploy.py`):
+
+| The update changes | Result |
+|---|---|
+| Docs, tests, CI files, static files only | Installed; nothing restarts (the wall display reloads itself for static files) |
+| Templates, views, API | Restarts `keezer-web` |
+| `controller.py`, `control_logic.py`, `fridge_control.py`, `thermometer.py`, `alerts.py` | Restarts `keezer` (the controller) |
+| Models, config, `app/__init__.py` | Restarts both |
+| A migration in `migrations/versions/` | Runs `flask db upgrade`, then restarts both |
+| `requires.txt` | Runs `pip install -r requires.txt`, then restarts both |
+| `deploy/*.service` or `*.timer` | **Installed but not applied**: the notification tells you to copy them and `daemon-reload` |
+| `deploy/kiosk.sh` | Takes effect the next time the kiosk starts |
+
+**Safety rails**
+
+- It only ever fast-forwards. If the Pi's checkout has local edits to tracked files, is on another
+  branch, or has its own commits, it refuses and tells you. Untracked files are ignored.
+- A fresh backup comes first, and the whole test suite runs on a throwaway copy of the update
+  before anything live is touched. A failing update is **reported once** and not retried until
+  `master` moves on.
+- After restarting it waits up to 2.5 minutes for the controller to log a fresh reading. If it
+  does not, it puts the previous code back (`git reset --hard`) and restarts again.
+- Rolling back restores code only. The database is not rolled back; migrations in this project
+  add columns with defaults, so the previous code still runs against them. If a migration
+  itself fails the code is rolled back and the notification says to look at the database; the
+  backup taken just before is the way back.
+- Two runs can never overlap (a lock file), and a manual `git pull` while it runs is safe to
+  retry.
+- It uses the same push notifications as the alerts (`NTFY_TOPIC`). If the Pi cannot fetch from
+  GitHub for about an hour (for example the repository was made private), you get one
+  "cannot check for updates" notice.
+
+**Turning it on** (once, on the Pi, after this change has been pulled):
+
+```
+cd ~/Documents/code/flask_fridge && . venv/bin/activate
+python -m app.scripts.autodeploy --dry-run            # fetches and shows what it would do
+sudo cp deploy/keezer-deploy.service deploy/keezer-deploy.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+# check that a systemd service may restart the services without a password (this only reads):
+sudo systemd-run --wait --pipe -p User=pi sudo -n systemctl is-active keezer keezer-web
+sudo systemctl enable --now keezer-deploy.timer
+```
+
+**Day to day**
+
+```
+systemctl list-timers | grep keezer-deploy            # when it last ran and runs next
+journalctl -u keezer-deploy -n 30                     # what it did
+sudo systemctl start keezer-deploy.service            # check right now instead of waiting
+sudo systemctl disable --now keezer-deploy.timer      # switch it off (updates become manual)
+rm ~/.keezer-deploy.json                              # forget a reported failure and try that commit again
+```
+
+**Limits to know about**
+
+- Everything on `master` is deployed, so protect `master` (see
+  [Branch protection and CI](#branch-protection-and-ci)). The Pi's own test run is a second check,
+  not a replacement for review.
+- The tests cannot prove the freezer behaves well, only that the code does what it is tested to
+  do. Watch the first cooling cycle after any change to the control logic.
+- Updates can restart the controller while the compressor is running. It resumes from its log in
+  about 10 seconds, but avoid merging control-logic changes while you are watching a delicate
+  batch.
 
 ## Backups and restoring
 
