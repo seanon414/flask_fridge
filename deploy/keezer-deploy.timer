@@ -1,0 +1,11 @@
+[Unit]
+Description=Check GitHub for a new keezer version every few minutes
+
+[Timer]
+# wait for the Pi's slow start-up to settle, then check again 3 minutes after each run finishes
+OnBootSec=10min
+OnUnitInactiveSec=3min
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

@@ -21,6 +21,9 @@ a laptop or a wall-mounted monitor, and sends a push notification if something g
   beside the chart, started automatically in a kiosk browser.
 - **Push alerts** (via [ntfy](https://ntfy.sh)) when it is too warm or too cold for too long,
   when the probe fails, or when the controller itself stops.
+- **Auto-deploy**: merge a pull request on GitHub and, once its tests pass, the Pi installs it within
+  a few minutes, restarting only what changed and rolling back if the controller does not come
+  back healthy. See [docs/operations.md](docs/operations.md#auto-deploy).
 - **Safe data handling**: the database lives outside the repository, with a verified nightly
   backup.
 
